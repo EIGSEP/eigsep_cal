@@ -1,9 +1,9 @@
-from eigsep_corr.data import DATA_PATH
 from eigsep_corr import io
 import numpy as np
 
+DATA_PATH = "/home/christian/Documents/research/eigsep/eigsep_cal/gain_calibration/data/oct24"
 
-def read_dat(module, id_num, keys=None):
+def read_dat(module, id_num, data_path=DATA_PATH):
     """
     Parameters
     ----------
@@ -12,24 +12,21 @@ def read_dat(module, id_num, keys=None):
     id_num : str
         The id number of the module. Labelled on the module itself.
     keys : list of str
-        Which keys to read from the data (e.g. polarization or input channel).
-        If None, all keys are read.
+        Which key to read from the data (e.g. polarization or input channel).
 
     Returns
     -------
-    data : dict
-        The data read from the module. Keys refer to polarization or input
-        channel in the case of the snap module.
+    data : np.ndarray
+        The data read from the module.
 
     """
     # default data type is big-endian int32
     dtype = io.build_dtype("int32", ">")
-    data = {}
-    d = np.load(f"{DATA_PATH}/gain_cal/{module}/{id_num}.npz")
-    if keys:
-        d = {k: v for k, v in d.items() if k in keys}
-    for k, v in d.items():
-        data[k] = np.frombuffer(v, dtype=dtype).astype(float)
+    if module == "snap":
+        d = np.load(f"{DATA_PATH}/{module}/C000091/{id_num}.npz")
+    else:
+        d = np.load(f"{DATA_PATH}/{module}/{module}{id_num}.npz")
+    data = np.frombuffer(d["3"], dtype=dtype).astype(float)
     return data
 
 
@@ -37,16 +34,16 @@ class SignalChain:
 
     # the inputs used for the reference signal to calibrate to
     ref_config = {
-        "fem": ("032", "north"),
-        "pam": ("375", "north"),
-        "snap": ("C000091", "E6"),
-        "fiber": ("4", "north"),
+        "fem": "032_east",
+        "pam": "377_north",
+        "snap": "E6",
+        "fiber": "G",
     }
     ref_pam_atten = 8
 
     # the signal to calibrate to
-    ref_snap, ref_snap_inp = ref_config["snap"]
-    ref_signal = read_dat("snap", ref_snap, keys=ref_snap_inp)
+    ref_snap = ref_config["snap"]
+    ref_signal = read_dat("snap", ref_snap)
 
     def __init__(self):
         self.get_ref_gains()
@@ -55,22 +52,22 @@ class SignalChain:
 
     def get_ref_gains(self):
         self.ref_gains = {}
-        for module, (id_num, inp) in self.ref_config.items():
+        for module, id_num in self.ref_config.items():
             data = read_dat(module, id_num)
-            self.ref_gains[module] = data[inp]
+            self.ref_gains[module] = data
 
-    def add_module(self, module, id_num, keys=None):
+    def add_module(self, module, id_num):
         self.modules[module] = id_num
-        data = read_dat(module, id_num, keys=keys)
-        self.gain_ratios[module] = {}
-        for inp in data.keys():
-            r = data[inp] / self.ref_gains[module]
-            if module == "snap":
-                key = inp[0].lower()
-                if key == "e":
-                    key = "east"
-                elif key == "n":
-                    key = "north"
-            else:
-                key = inp
-            self.gain_ratios[module][key] = r
+        data = read_dat(module, id_num)
+        r = data / self.ref_gains[module]
+        self.gain_ratios[module] = r
+
+    @property
+    def ex_bandpass(self):
+        """
+        The expected bandpass of the signal chain
+        """
+        sig = self.ref_signal
+        for module in self.modules:
+            sig = sig * self.gain_ratios[module]
+        return sig
