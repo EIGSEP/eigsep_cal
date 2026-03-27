@@ -1,2 +1,8 @@
+from importlib.metadata import PackageNotFoundError, version
+
 __author__ = "Christian Hellum Bye"
-__version__ = "0.0.1"
+
+try:
+    __version__ = version("eigsep_cal")
+except PackageNotFoundError:
+    __version__ = "unknown"

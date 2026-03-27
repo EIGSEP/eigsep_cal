@@ -1,7 +1,9 @@
-from eigsep_corr import io
-import numpy as np
+from pathlib import Path
 
-DATA_PATH = "/home/christian/Documents/research/eigsep/eigsep_cal/gain_calibration/data/oct24"
+import numpy as np
+from eigsep_corr import io
+
+DATA_PATH = Path(__file__).parent / "data" / "oct24"
 
 def read_dat(module, id_num, data_path=DATA_PATH):
     """

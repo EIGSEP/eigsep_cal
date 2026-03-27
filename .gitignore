@@ -1,4 +1,16 @@
-.ipynb_checkpoints/
-.venv/
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
 build/
-src/*.egg-info
+
+# Environments
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
