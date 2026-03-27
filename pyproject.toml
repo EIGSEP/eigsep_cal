@@ -32,6 +32,7 @@ packages = ["src/eigsep_cal"]
 [tool.ruff]
 line-length = 79
 src = ["src"]
+extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
