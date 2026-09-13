@@ -2,12 +2,11 @@
 Tools for Dicke switching calibration.
 """
 
-import numpy as np
 
 def calc_Tant_star(P_ant, P_ns, P_load, T_ns, T_load):
     """
-    Calculate the *uncalibrated* antenna temperature, Tant*, using 
-    data from Dicke switching measurements. This is Equation 1 in 
+    Calculate the *uncalibrated* antenna temperature, Tant*, using
+    data from Dicke switching measurements. This is Equation 1 in
     Monsalve+2017.
 
     Here noise source is really (load + noise source) and load is
@@ -23,7 +22,8 @@ def calc_Tant_star(P_ant, P_ns, P_load, T_ns, T_load):
     P_load : array-like
         Power measured from the load.
     T_ns : float
-        Realistic assumption of temperature of the noise source.
+        Realistic assumption of the excess temperature of the noise
+        source above the load.
     T_load : float
         Realistic assumption of temperature of the load.
 
