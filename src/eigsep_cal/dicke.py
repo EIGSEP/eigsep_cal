@@ -32,5 +32,5 @@ def calc_Tant_star(P_ant, P_ns, P_load, T_ns, T_load):
     Tant_star : array-like
         Uncalibrated antenna temperature.
     """
-    Tant_star = (P_ant - P_load) / (P_ns - P_load) * T_ns + T_ns
+    Tant_star = (P_ant - P_load) / (P_ns - P_load) * T_ns + T_load
     return Tant_star
