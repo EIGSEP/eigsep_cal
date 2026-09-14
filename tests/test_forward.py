@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from eigsep_cal.forward import Source, power
+from eigsep_cal.conventions import D5_ENBW_HZ
+from eigsep_cal.forward import Source, power, radiometer_noise
 from eigsep_cal.receiver import ReceiverModel, noise_wave_map
 
 N_TIME, N_FREQ = 3, 4
@@ -196,3 +197,54 @@ class TestPower:
     def test_source_shapes_checked(self):
         with pytest.raises(ValueError, match="share one shape"):
             Source(np.zeros((1, N_FREQ)), np.zeros((1, N_FREQ + 1)))
+
+
+class TestRadiometerNoise:
+    def _draw(self, n_int, seed=0, n_time=20000):
+        p = np.full((n_time, 2), 100.0)
+        tau = np.full(n_time, 0.5)
+        n = np.full(n_time, n_int)
+        return radiometer_noise(
+            p, D5_ENBW_HZ, tau, n, np.random.default_rng(seed)
+        )
+
+    def test_std_matches_radiometer_equation(self):
+        noise = self._draw(n_int=4)
+        sigma = 100.0 / np.sqrt(D5_ENBW_HZ * 0.5 * 4)
+        np.testing.assert_allclose(noise.std(axis=0), sigma, rtol=0.02)
+        np.testing.assert_allclose(
+            noise.mean(axis=0), 0.0, atol=5 * sigma / 141
+        )
+
+    def test_averaging_reduces_noise(self):
+        ratio = self._draw(n_int=1).std() / self._draw(n_int=16).std()
+        np.testing.assert_allclose(ratio, 4.0, rtol=0.03)
+
+    def test_reproducible(self):
+        np.testing.assert_array_equal(
+            self._draw(n_int=2, seed=7), self._draw(n_int=2, seed=7)
+        )
+
+    @pytest.mark.parametrize(
+        "tau, n_int",
+        [([0.5, 0.0], [1, 1]), ([0.5, 0.5], [1, 0]), ([0.5], [1, 1])],
+    )
+    def test_invalid_inputs(self, tau, n_int):
+        with pytest.raises(ValueError):
+            radiometer_noise(
+                np.ones((2, 3)),
+                D5_ENBW_HZ,
+                tau,
+                n_int,
+                np.random.default_rng(0),
+            )
+
+    def test_n_int_must_be_integer(self):
+        with pytest.raises(ValueError, match="n_int"):
+            radiometer_noise(
+                np.ones((2, 3)),
+                D5_ENBW_HZ,
+                [0.5, 0.5],
+                [1.5, 1.0],
+                np.random.default_rng(0),
+            )
