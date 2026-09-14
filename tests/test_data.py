@@ -126,9 +126,11 @@ class TestObservation:
         "field, value",
         [
             ("tau_s", np.zeros(N_TIME)),
+            ("tau_s", np.array([0.5, np.nan, 0.5, 0.5])),
             ("n_int", np.full(N_TIME, 1.5)),
             ("covariates", {"t_amb_k": [296.0]}),
             ("changepoints_unix", [2.0, 1.0]),
+            ("changepoints_unix", [1.0, np.nan]),
         ],
     )
     def test_invalid_fields(self, field, value):

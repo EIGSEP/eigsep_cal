@@ -139,7 +139,7 @@ class Observation:
         state = v.states("state", self.state)
         v.check_shape("state", state, (n_time,))
         tau = _series("tau_s", self.tau_s, n_time)
-        if np.any(tau <= 0):
+        if not np.all(tau > 0):
             raise ValueError("tau_s must be > 0")
         n_int = np.array(self.n_int)
         if (
@@ -171,7 +171,9 @@ class Observation:
         changepoints = v.float_array(
             "changepoints_unix", self.changepoints_unix, ndim=1
         )
-        if np.any(np.diff(changepoints) <= 0):
+        if not np.all(np.isfinite(changepoints)) or not np.all(
+            np.diff(changepoints) > 0
+        ):
             raise ValueError("changepoints_unix must be strictly increasing")
 
         _set(
