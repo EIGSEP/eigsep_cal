@@ -131,7 +131,7 @@ def radiometer_noise(power, enbw_hz, tau_s, n_int, rng):
         raise ValueError("n_int must be integers")
     if tau.shape != (p.shape[0],) or n.shape != (p.shape[0],):
         raise ValueError("tau_s and n_int need one value per time sample")
-    if enbw_hz <= 0 or np.any(tau <= 0) or np.any(n < 1):
+    if not (enbw_hz > 0) or not np.all(tau > 0) or np.any(n < 1):
         raise ValueError("enbw_hz and tau_s must be > 0, n_int >= 1")
     sigma = p / np.sqrt(enbw_hz * tau[:, None] * n[:, None])
     return rng.normal(0.0, sigma)

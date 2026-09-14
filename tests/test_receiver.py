@@ -85,9 +85,10 @@ class TestReceiverModel:
         with pytest.raises(ValueError, match="t0_k"):
             ReceiverModel(gamma_rec=np.zeros(N_FREQ), gain=_gain(), **kwargs)
 
-    def test_gain_must_be_positive(self):
+    @pytest.mark.parametrize("bad", [0.0, -1.0, np.nan])
+    def test_gain_must_be_positive(self, bad):
         gain = _gain()
-        gain[0, 0] = 0.0
+        gain[0, 0] = bad
         with pytest.raises(ValueError, match="gain"):
             ReceiverModel(
                 gamma_rec=np.zeros(N_FREQ), gain=gain, **_rb_kwargs()

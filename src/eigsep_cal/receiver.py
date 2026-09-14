@@ -64,7 +64,7 @@ class ReceiverModel:
                 f"parameterisation must be one of {PARAMETERISATIONS}"
             )
         gain = v.float_array("gain", self.gain, ndim=2)
-        if np.any(gain <= 0):
+        if not np.all(gain > 0):
             raise ValueError("gain must be > 0")
         object.__setattr__(self, "gain", gain)
         n_time, n_freq = gain.shape

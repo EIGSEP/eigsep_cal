@@ -36,6 +36,7 @@ class TestFrequencies:
             [[1.0, 2.0]],
             [1.0, float("nan"), 3.0],
             [float("nan")],
+            [1.0, float("inf")],
         ],
     )
     def test_freqs_rejects_bad_grids(self, bad):
