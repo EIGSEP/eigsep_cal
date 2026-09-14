@@ -28,3 +28,22 @@ def test_states_match_spec():
         "RFSP1_SHORT",
         "RFSP1_OPEN",
     )
+
+
+def test_public_api():
+    import eigsep_cal
+
+    for name in (
+        "SParams",
+        "embed",
+        "ReceiverModel",
+        "noise_wave_map",
+        "Source",
+        "power",
+        "radiometer_noise",
+        "SkyTemperature",
+        "Reflection",
+        "Observation",
+        "conventions",
+    ):
+        assert hasattr(eigsep_cal, name), name
