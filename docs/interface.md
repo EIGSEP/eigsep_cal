@@ -112,7 +112,7 @@ P_s(ν, t) = g_s(ν, t) · [ M_s T_s + |Γ_s F_s|² T_unc + Re(Γ_s F_s) T_cos
 |---|---|---|
 | `t_unc_k`, `t_cos_k`, `t_sin_k`, `t0_k` | `(n_freq,)` or `(n_time, n_freq)` | Rogers & Bowman parameterisation |
 | `t_r_k`, `t_l_k`, `c_k` | same; `c_k` complex | Intrinsic parameterisation (M003 eq. `map`). Use either this set or the row above, selected by `parameterisation`. |
-| `gamma_rec` | `(n_freq,)` or `(n_time, n_freq)` complex | Hourly in D5 |
+| `gamma_rec` | `(n_freq,)` or `(n_time, n_freq)` complex | Measured at sparse D5 epochs, hourly only on the night of Jul 16→17; mapping onto samples is open (§ 11) |
 | `gain` | `(n_time, n_freq)` | Must be > 0 |
 | `path_gain_ratio` | `dict[state, (n_freq,)]` | Defaults to 1 |
 
@@ -410,6 +410,10 @@ The generator must be able to switch on each of these effects independently, eve
 | SNAP channel equivalent noise bandwidth and neighbour correlation | A (noise model) | Analysis to-do, from the PFB taps in the firmware |
 | Latent switch state for `MISSING` rows | v1 | — |
 | Structured or sparse covariance for large blocks (dense above ~10⁴ parameters is too big) | v1 | — |
+| Time-varying path-gain ratios. § 4.2 and `ReceiverModel` accept `path_gain_ratio` as `(n_freq,)` only, but § 9 asks the generator for drifting r_s. Allow `(n_time, n_freq)`. Folding r_s(t) into `gain` row by row works, but then the recorded gain is no longer the common g that the coverage tests check. | A (`ReceiverModel`); generator (§ 9) | — |
+| Frequency grids of `SParams`, `Source` and `ReceiverModel`. None carries `freqs_mhz`, so the § 2 check cannot run on them. Shape checks catch a different channel count but not a different grid of the same length, and a length-1 `SParams` broadcasts silently in `embed`. `_validate.same_grid` exists, but nothing calls it. Either add `freqs_mhz` to these objects, or build them only inside stages and adapters from objects whose grids are checked. | A (every stage; `embed`, `power`) | — |
+| Batch axes in the forward model. § 2 promises `(..., n_time, n_freq)`, but `power`, `Source`, `ReceiverModel.gain` and `radiometer_noise` accept 2-D arrays only, so pushing `Posterior.draw` samples through `power` means a loop that rebuilds a `ReceiverModel` per draw. A closed-form Gaussian `predict` does not need batching; sampling Γ from `gamma_cov` does. Decide: batch these, or narrow § 2. | A (`predict`, § 10 held-out checks) | — |
+| Mapping `Reflection` epochs onto samples. `Reflection` holds `(n_meas, n_freq)` at measurement times, while `Source.gamma_s` and `ReceiverModel.gamma_rec` are per sample. Undecided: the time mapping (nearest, interpolation, or piecewise constant between changepoints), how `gamma_cov` propagates, and the prior for samples far from any measurement. D5 S11 epochs (`metadata_snapshot_unix`, MDT): Jul 12 21:48 (receiver only); Jul 13 10:11–10:18; 14 pairs, roughly hourly, Jul 16 22:02 → Jul 17 10:29; Jul 17 13:10 and 19:17. Nothing between Jul 13 10:18 and Jul 16 22:02, which includes the night of Jul 15→16. | A (`fit_noise_waves`, `calibrate`, `predict`); adapters (§ 8) | Q-CHB-32 (workspace) |
 
 ---
 
@@ -450,3 +454,10 @@ The generator must be able to switch on each of these effects independently, eve
 - **v0, 2026-09-13 (same day, before any consumer):** eigsim's rotation is already the physical azimuth-outer mount, so § 7 no longer asks for a flip (workspace logbook 2026-09-13, Q-CHB-23). The beam phase-reference question is tracked in Q-BK-01.
 
   Sections changed: § 7, 11.
+- **v0, 2026-09-14:** four gaps found while building the v0 forward model, added as open items; no interface change yet.
+  - Drifting r_s (§ 9) against the fixed `(n_freq,)` `path_gain_ratio` (§ 4.2).
+  - No frequency grid on `SParams`, `Source` or `ReceiverModel`, so § 2's grid check cannot run on them.
+  - No batch axis in `power` and the objects it takes, against § 2.
+  - No rule for mapping `Reflection` epochs onto samples. `gamma_rec`'s "hourly" note corrected: D5 S11 is sparse, hourly only on the night of Jul 16→17 (workspace Q-CHB-32).
+
+  Sections changed: § 4.2, 11.
