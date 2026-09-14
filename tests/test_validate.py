@@ -27,7 +27,17 @@ class TestArrays:
 
 
 class TestFrequencies:
-    @pytest.mark.parametrize("bad", [[], [2.0, 1.0], [1.0, 1.0], [[1.0, 2.0]]])
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            [],
+            [2.0, 1.0],
+            [1.0, 1.0],
+            [[1.0, 2.0]],
+            [1.0, float("nan"), 3.0],
+            [float("nan")],
+        ],
+    )
     def test_freqs_rejects_bad_grids(self, bad):
         with pytest.raises(ValueError):
             v.freqs_mhz(bad)

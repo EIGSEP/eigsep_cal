@@ -28,7 +28,7 @@ def complex_array(name, value, ndim=None):
 def freqs_mhz(value):
     """A validated frequency axis: 1-D, non-empty, strictly increasing."""
     arr = float_array("freqs_mhz", value, ndim=1)
-    if arr.size == 0 or np.any(np.diff(arr) <= 0):
+    if arr.size == 0 or np.any(np.isnan(arr)) or not np.all(np.diff(arr) > 0):
         raise ValueError("freqs_mhz must be non-empty and strictly increasing")
     return arr
 
