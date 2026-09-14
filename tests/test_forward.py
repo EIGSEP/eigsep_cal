@@ -197,6 +197,87 @@ class TestPower:
             power(tiled, _receiver(), STATE, TIMES),
         )
 
+    def test_time_varying_inputs_match_per_sample_calls(self):
+        """A routing bug like arr[:rows.size] would still pass the other
+        power tests, since they use n_time=1 or tiled/constant rows."""
+        rng = np.random.default_rng(7)
+        n_time, n_freq = 6, 5
+        state = ["RFANT", "RFNON", "RFAMB", "RFANT", "RFNON", "RFANT"]
+        times = np.arange(n_time, dtype=float)
+
+        def draw_complex(shape, max_mag):
+            mag = max_mag * rng.uniform(size=shape)
+            phase = 2 * np.pi * rng.uniform(size=shape)
+            return mag * np.exp(1j * phase)
+
+        gamma_rec = draw_complex((n_time, n_freq), 0.3)
+        gain = rng.uniform(0.5, 2.0, (n_time, n_freq))
+        t_unc_k = rng.uniform(0.0, 100.0, (n_time, n_freq))
+        t_cos_k = rng.uniform(-50.0, 50.0, (n_time, n_freq))
+        t_sin_k = rng.uniform(-50.0, 50.0, (n_time, n_freq))
+        t0_k = rng.uniform(0.0, 100.0, (n_time, n_freq))
+        path_gain_ratio = {"RFNON": rng.uniform(0.8, 1.2, n_freq)}
+
+        receiver = ReceiverModel(
+            gamma_rec=gamma_rec,
+            gain=gain,
+            t_unc_k=t_unc_k,
+            t_cos_k=t_cos_k,
+            t_sin_k=t_sin_k,
+            t0_k=t0_k,
+            path_gain_ratio=path_gain_ratio,
+        )
+
+        rfant_gamma = draw_complex((n_time, n_freq), 0.5)
+        rfant_t = rng.uniform(0.0, 1000.0, (n_time, n_freq))
+        rfnon_gamma = draw_complex((n_time, n_freq), 0.5)
+        rfnon_t = rng.uniform(0.0, 1000.0, (n_time, n_freq))
+        rfamb_gamma = draw_complex((1, n_freq), 0.5)
+        rfamb_t = rng.uniform(0.0, 1000.0, (1, n_freq))
+        additive_rfant = rng.uniform(-1.0, 1.0, (n_time, n_freq))
+
+        sources = {
+            "RFANT": Source(rfant_gamma, rfant_t),
+            "RFNON": Source(rfnon_gamma, rfnon_t),
+            "RFAMB": Source(rfamb_gamma, rfamb_t),
+        }
+        vectorised = power(
+            sources,
+            receiver,
+            state,
+            times,
+            additive={"RFANT": additive_rfant},
+        )
+
+        looped = []
+        for i in range(n_time):
+            row_receiver = ReceiverModel(
+                gamma_rec=gamma_rec[i],
+                gain=gain[i : i + 1],
+                t_unc_k=t_unc_k[i],
+                t_cos_k=t_cos_k[i],
+                t_sin_k=t_sin_k[i],
+                t0_k=t0_k[i],
+                path_gain_ratio=path_gain_ratio,
+            )
+            row_sources = {
+                "RFANT": Source(rfant_gamma[i : i + 1], rfant_t[i : i + 1]),
+                "RFNON": Source(rfnon_gamma[i : i + 1], rfnon_t[i : i + 1]),
+                "RFAMB": Source(rfamb_gamma, rfamb_t),
+            }
+            row_power = power(
+                row_sources,
+                row_receiver,
+                state[i : i + 1],
+                times[i : i + 1],
+                additive={"RFANT": additive_rfant[i]},
+            )
+            looped.append(row_power[0])
+
+        np.testing.assert_allclose(
+            vectorised, np.stack(looped), rtol=1e-13, atol=0
+        )
+
     def test_missing_source_raises(self):
         with pytest.raises(ValueError, match="RFNON"):
             power(_sources(), _receiver(), ["RFANT", "RFNON", "RFANT"], TIMES)
