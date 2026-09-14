@@ -35,7 +35,7 @@ Items marked **Open** need a decision before code depends on them. Once a consum
 **Rules**
 - **eigsep_cal** depends on numpy; SciPy and JAX may be added when needed. It never reads instrument data files, and never models sky, beam or terrain. It knows nothing about D5 quirks. It may save and load its own objects (§ 5.6).
 - **eigsim** never imports eigsep_cal and knows nothing about receivers. It returns plain arrays.
-- **The generator** in mock_analysis is the only code that imports both (home: Q-CHB-29).
+- **The generator** in mock_analysis is the only code that imports both. It cannot live inside eigsim, which never imports eigsep_cal. How it is packaged in mock_analysis (its own workspace member, or notebooks) is Q-CHB-29.
 - **Adapters** do all file I/O and all D5 handling (§ 8). They emit the same objects as the generator, so a stage cannot tell synthetic input from real input.
 
 ---
@@ -262,8 +262,13 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
   - It does **not** add `receiver.temperature`.
   - Group samples by unique (elevation, azimuth) and simulate each group's times together. D5 orientations repeat: static at night, a raster on Jul 17.
   - The existing `simulate()` and its grid output stay unchanged.
-- **Rotation.** Keep `drive_rotation_matrix` for now. Isolate the composition so that the answer to Q-CHB-23 is a one-line change, not a refactor.
+- **Rotation.** `drive_rotation_matrix` (`eigsim/rotations.py`) composes `R_X(el) @ R_Z(az)`, with azimuth *inner*. CHB believes the D5 mount is azimuth-*outer*, `R_Z(az) @ R_X(el)` (Q-CHB-23), which is also what gives the transmitter 2-D nadir coverage.
+  - Isolate the composition so that the flip is a one-line change.
+  - Flip it once the Jul 17 raster confirms the mount (workspace roadmap § 4).
 - **Two antennas.** box-air (suspended) and box-gnd (on the ground) each get their own beam, horizon and ground treatment from config (Q-CHB-28).
+  - **box-gnd** sits directly on the ground: the bowtie on a box identical to box-air's, then soil, with **no ground plane**.
+  - Its orientation never changed during D5; the value is Q-ARP-01.
+  - Start from the HFSS free-space bowtie beam, the best model available. Ground coupling is not simulated.
 - **Frequencies.** Accept an arbitrary frequency array, in particular the D5 channel grid.
 - **Output.** float64, documented as the `t_ant_k` of `SkyTemperature` (§ 5.1). It describes the free-space antenna; balun and coax effects belong to the generator, not eigsim (§ 3).
 - **Tests.**
@@ -290,7 +295,7 @@ These never enter eigsep_cal:
   - Resample from the 1000-point grid, carrying the resampling error.
   - The OSL keys are Q-CGT-01; the switch-path file is Q-CGT-02 and Q-CGT-03.
   - Remember the `load` = RFNOFF trap.
-  - Files with a singular OSL solve are Q-CHB-12.
+  - Files with a singular OSL solve are Q-CGT-09. The likely cause is zero-filled sweeps at session start (cmt_vna #54).
 - **Changepoints.** From `docs/field_notes/d5_timeline.md`: box-air lifts, reboots, battery failures, the comb onset.
 
 ---
@@ -329,9 +334,9 @@ The generator must be able to switch on each of these effects independently, eve
 
 | Item | Needed by | Tracked |
 |---|---|---|
-| Rotation composition of the motor mount | B | Q-CHB-23 |
-| box-gnd beam, ground and horizon model | B | Q-CHB-28 |
-| Home of the generator in mock_analysis, and how mock_analysis depends on the unpushed eigsep_cal | A + B integration | Q-CHB-29 |
+| Rotation composition of the motor mount: CHB believes azimuth-outer; confirm from the Jul 17 raster, then flip eigsim (§ 7) | B | Q-CHB-23 (answered); stage-4 check |
+| box-gnd orientation value (setup settled, § 7) | B | Q-ARP-01 |
+| Packaging of the generator in mock_analysis. `rebuild` is on `EIGSEP/eigsep_cal`, so mock_analysis can take it as a git source. | A + B integration | Q-CHB-29 |
 | S-parameter port orientation and reference planes | A (`embed`), stage 2 | Q-CGT-03 |
 | Noise-source pad and ENR | A (priors, generator) | Q-CGT-05 |
 | Balun and balun–switch coax model and priors. The coax was destroyed, so D5 has no measurement. | Generator; stage 5 comparisons with simulations | Q-CGT-10; IMP-05 (future deployments) |
@@ -344,3 +349,10 @@ The generator must be able to switch on each of these effects independently, eve
 ## 12. Changelog
 - **v0, 2026-09-13:** first draft.
 - **v0, 2026-09-13 (same day, before any consumer):** the RFANT source includes the balun and the unmeasurable balun–switch coax, while the beam models are free space (§ 3, 4.3, 5.1, 5.3, 6, 7, 9, 11).
+- **v0, 2026-09-13 (same day, before any consumer):** CHB's answers recorded.
+  - Mount believed azimuth-outer (Q-CHB-23).
+  - box-gnd setup settled: on a box on soil, no ground plane, fixed orientation, HFSS free-space beam as the start (Q-CHB-28 → Q-ARP-01).
+  - The generator cannot live in eigsim (Q-CHB-29).
+  - The singular-OSL question is now Q-CGT-09.
+  
+  Sections changed: § 1, 7, 8, 11.
