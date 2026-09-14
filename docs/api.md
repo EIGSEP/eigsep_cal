@@ -102,7 +102,7 @@ F_s = sqrt(1 − |Γ_rec|²) / (1 − Γ_s Γ_rec),    M_s = (1 − |Γ_s|²) |F
 |---|---|---|
 | `t_unc_k`, `t_cos_k`, `t_sin_k`, `t0_k` | `(n_freq,)` or `(n_time, n_freq)` | Rogers & Bowman parameterisation |
 | `t_r_k`, `t_l_k`, `c_k` | same; `c_k` complex | Intrinsic parameterisation (eq. map, below). Use either this set or the row above, selected by `parameterisation`. |
-| `gamma_rec` | `(n_freq,)` or `(n_time, n_freq)` complex | Measured at sparse epochs |
+| `gamma_rec` | `(n_freq,)` or `(n_time, n_freq)` complex | Measured at sparse epochs; mapping onto samples is open (§ 11) |
 | `gain` | `(n_time, n_freq)` | Must be > 0 |
 | `path_gain_ratio` | `dict[state, (n_freq,)]` | Defaults to 1 |
 
@@ -333,11 +333,22 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
 | SNAP channel equivalent noise bandwidth and neighbour correlation | Noise model (§ 4.4) |
 | Latent switch state for `MISSING` rows | v1 |
 | Structured or sparse covariance for large blocks (dense above ~10⁴ parameters is too big) | v1 |
+| Time-varying path-gain ratios. § 4.2 and `ReceiverModel` accept `path_gain_ratio` as `(n_freq,)` only, but a generator needs drifting r_s to test the fit. Allow `(n_time, n_freq)`. Folding r_s(t) into `gain` row by row works, but then the recorded gain is no longer the common g that the coverage tests check. | `ReceiverModel`; generator |
+| Frequency grids of `SParams`, `Source` and `ReceiverModel`. None carries `freqs_mhz`, so the § 2 check cannot run on them. Shape checks catch a different channel count but not a different grid of the same length, and a length-1 `SParams` broadcasts silently in `embed`. `_validate.same_grid` exists, but nothing calls it. Either add `freqs_mhz` to these objects, or build them only inside stages and adapters from objects whose grids are checked. | Every stage; `embed`, `power` |
+| Batch axes in the forward model. § 2 promises `(..., n_time, n_freq)`, but `power`, `Source`, `ReceiverModel.gain` and `radiometer_noise` accept 2-D arrays only, so pushing `Posterior.draw` samples through `power` means a loop that rebuilds a `ReceiverModel` per draw. A closed-form Gaussian `predict` does not need batching; sampling Γ from `gamma_cov` does. Decide: batch these, or narrow § 2. | `predict`, § 10 held-out checks |
+| Mapping `Reflection` epochs onto samples. `Reflection` holds `(n_meas, n_freq)` at measurement times, while `Source.gamma_s` and `ReceiverModel.gamma_rec` are per sample. Undecided: the time mapping (nearest, interpolation, or piecewise constant between changepoints), how `gamma_cov` propagates, and the prior for samples far from any measurement, which matters because S11 epochs can be days apart. | `fit_noise_waves`, `calibrate`, `predict`; adapters |
 
 ---
 
 ## 12. Changelog
 - **v0, 2026-09-13:** first draft, as part of the Deployment 5 interface spec.
+- **v0, 2026-09-14:** four gaps found while building the v0 forward model, added as open items; no interface change yet.
+  - Drifting r_s against the fixed `(n_freq,)` `path_gain_ratio` (§ 4.2).
+  - No frequency grid on `SParams`, `Source` or `ReceiverModel`, so § 2's grid check cannot run on them.
+  - No batch axis in `power` and the objects it takes, against § 2.
+  - No rule for mapping `Reflection` epochs onto samples; the `gamma_rec` note now says epochs are sparse.
+
+  Sections changed: § 4.2, 11.
 - **v0, 2026-09-14:** split out of that spec, with the same section numbers. The sections on eigsim, the D5 adapters and the generator's truth model (§ 7–9), and D5-specific notes elsewhere, stay in the D5 spec. No interface change.
 - **v0, 2026-09-14:** equations written out (§ 4.1–4.3 and a new § 4.5), so the spec no longer depends on memo M003 being at hand. No interface change.
 
