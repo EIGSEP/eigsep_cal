@@ -115,3 +115,17 @@ class TestReceiverModel:
                 path_gain_ratio={"VNAANT": np.ones(N_FREQ)},
                 **_rb_kwargs(),
             )
+
+    def test_path_gain_ratio_is_read_only(self):
+        rx = ReceiverModel(
+            gamma_rec=np.zeros(N_FREQ),
+            gain=_gain(),
+            path_gain_ratio={"RFNON": 1.1 * np.ones(N_FREQ)},
+            **_rb_kwargs(),
+        )
+        with pytest.raises(TypeError):
+            rx.path_gain_ratio["RFANT"] = -np.ones(N_FREQ)
+        with pytest.raises(TypeError):
+            rx.path_gain_ratio["RFNON"] = np.ones(N_FREQ)
+        with pytest.raises(ValueError):
+            rx.path_gain("RFANT")[0] = 5.0

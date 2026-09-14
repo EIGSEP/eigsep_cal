@@ -1,6 +1,7 @@
 """Receiver noise parameters (spec § 4.2; M003 eqs. Ps and map)."""
 
 from dataclasses import dataclass
+from types import MappingProxyType
 
 import numpy as np
 
@@ -101,10 +102,10 @@ class ReceiverModel:
             v.states("path_gain_ratio", [state])
             arr = v.float_array(f"path_gain_ratio[{state}]", value)
             v.check_shape(f"path_gain_ratio[{state}]", arr, (n_freq,))
-            if np.any(arr <= 0):
+            if not np.all(arr > 0):
                 raise ValueError(f"path_gain_ratio[{state}] must be > 0")
             ratios[state] = arr
-        object.__setattr__(self, "path_gain_ratio", ratios)
+        object.__setattr__(self, "path_gain_ratio", MappingProxyType(ratios))
 
     @property
     def n_time(self):
@@ -125,4 +126,6 @@ class ReceiverModel:
 
     def path_gain(self, state):
         """Path-gain ratio r_s for *state*, ones when not given."""
-        return self.path_gain_ratio.get(state, np.ones(self.n_freq))
+        if state in self.path_gain_ratio:
+            return self.path_gain_ratio[state]
+        return v.float_array("path_gain", np.ones(self.n_freq))
