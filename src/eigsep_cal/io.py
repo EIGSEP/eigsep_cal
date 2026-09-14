@@ -2,6 +2,7 @@
 
 import dataclasses
 import json
+from pathlib import Path
 
 import numpy as np
 
@@ -9,6 +10,15 @@ from .conventions import SPEC_VERSION
 
 _DICT = "__dict__."
 _JSON = "__json__."
+
+
+def _npz_path(path):
+    """*path* as a :class:`~pathlib.Path`, with ``.npz`` appended if
+    it is missing (``np.savez`` appends it; :func:`np.load` does not)."""
+    path = Path(path)
+    if path.suffix != ".npz":
+        path = path.with_name(path.name + ".npz")
+    return path
 
 
 def save(obj, path):
@@ -32,11 +42,12 @@ def save(obj, path):
             if hasattr(value, "keys"):
                 value = dict(value)
             payload[_JSON + f.name] = np.array(json.dumps(value))
-    np.savez(path, **payload)
+    np.savez(_npz_path(path), **payload)
 
 
 def load(path, cls):
     """Read an object of class *cls* written by :func:`save`."""
+    path = _npz_path(path)
     with np.load(path, allow_pickle=False) as d:
         version = str(d["spec_version"])
         if version != SPEC_VERSION:

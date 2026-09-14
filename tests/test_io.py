@@ -34,6 +34,18 @@ def test_roundtrip(tmp_path, make):
     assert_same(obj, type(obj).load(path))
 
 
+def test_roundtrip_without_npz_suffix(tmp_path):
+    obj = reflection()
+    obj.save(tmp_path / "run1")
+    assert_same(obj, Reflection.load(tmp_path / "run1"))
+
+
+def test_roundtrip_without_npz_suffix_str_paths(tmp_path):
+    obj = reflection()
+    obj.save(str(tmp_path / "run1"))
+    assert_same(obj, Reflection.load(str(tmp_path / "run1")))
+
+
 def test_empty_covariates_roundtrip(tmp_path):
     obj = observation(covariates={}, provenance={})
     obj.save(tmp_path / "o.npz")
