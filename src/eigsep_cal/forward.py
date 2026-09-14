@@ -98,3 +98,39 @@ def power(sources, receiver, state, times_unix, additive=None):
             a_s = v.float_array(f"additive[{s}]", additive[s])
             out[rows] += _rows(f"additive[{s}]", a_s, rows, n_time, n_freq)
     return out
+
+
+def radiometer_noise(power, enbw_hz, tau_s, n_int, rng):
+    """Gaussian radiometer noise (spec § 4.4).
+
+    sigma^2 = P^2 / (B_eff tau n_int) per sample, channels independent.
+
+    Parameters
+    ----------
+    power : array_like
+        Noiseless power, ``(n_time, n_freq)``.
+    enbw_hz : float
+        Equivalent noise bandwidth; ``conventions.D5_ENBW_HZ`` for D5.
+    tau_s : array_like
+        Time per integration in s, ``(n_time,)``.
+    n_int : array_like of int
+        Integrations averaged into each sample, ``(n_time,)``.
+    rng : numpy.random.Generator
+        Random number generator.
+
+    Returns
+    -------
+    noise : np.ndarray
+        Same shape as *power*.
+    """
+    p = v.float_array("power", power, ndim=2)
+    tau = v.float_array("tau_s", tau_s, ndim=1)
+    n = np.asarray(n_int)
+    if not np.issubdtype(n.dtype, np.integer):
+        raise ValueError("n_int must be integers")
+    if tau.shape != (p.shape[0],) or n.shape != (p.shape[0],):
+        raise ValueError("tau_s and n_int need one value per time sample")
+    if enbw_hz <= 0 or np.any(tau <= 0) or np.any(n < 1):
+        raise ValueError("enbw_hz and tau_s must be > 0, n_int >= 1")
+    sigma = p / np.sqrt(enbw_hz * tau[:, None] * n[:, None])
+    return rng.normal(0.0, sigma)
