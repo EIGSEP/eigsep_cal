@@ -33,9 +33,9 @@ Items marked **Open** need a decision before code depends on them. Once a consum
 ```
 
 **Rules**
-- **eigsep_cal** depends on numpy; SciPy and JAX may be added when needed. It never reads instrument data files, and never models sky, beam or terrain. It knows nothing about D5 quirks. It may save and load its own objects (§ 5.6).
+- **eigsep_cal** depends on numpy. The v0 stage solvers are closed-form Gaussian (CHB, 2026-09-13): the drift model of 3a is linear in its basis coefficients, and given Q_s the calibration equation of 3b is linear in Θ. SciPy, JAX or a sampler come in only when a nonlinear block needs them. It never reads instrument data files, and never models sky, beam or terrain. It knows nothing about D5 quirks. It may save and load its own objects (§ 5.6).
 - **eigsim** never imports eigsep_cal and knows nothing about receivers. It returns plain arrays.
-- **The generator** in mock_analysis is the only code that imports both. It cannot live inside eigsim, which never imports eigsep_cal. How it is packaged in mock_analysis (its own workspace member, or notebooks) is Q-CHB-29.
+- **The generator** in mock_analysis is the only code that imports both. It cannot live inside eigsim, which never imports eigsep_cal. It is its own mock_analysis workspace member (Q-CHB-29, CHB 2026-09-13).
 - **Adapters** do all file I/O and all D5 handling (§ 8). They emit the same objects as the generator, so a stage cannot tell synthetic input from real input.
 
 ---
@@ -126,7 +126,7 @@ In the generator, any of these may be a function of a named covariate from `Obse
 - **Noise source** (generator only).
   - Diode excess temperature: T_ex = 290 K · 10^(ENR/10).
   - Behind a matched pad with loss factor L ≥ 1 at physical temperature T_pad, the source temperature before the path is (T_diode + T_ex) / L + (1 − 1/L) · T_pad.
-  - The D5 ENR and pad values are open (Q-CGT-05).
+  - The D5 ENR and pad values are open (Q-CGT-05). Until Charlie answers, use eigsep_observing v2.14.0 `obs_config.yaml` as a stand-in: ENR 35 dB behind a 30 dB pad, so T_ex / L ≈ 917 K at the switch. The instrument paper's 31 dB behind −20 dB conflicts with it.
 - **Fits never need this.** They use M003's effective constants T_NS and T_L (eq. `TNSTL`), with a prior on T_NS.
 - **Balun and coax** (generator only).
   - The generator turns eigsim's free-space `t_ant_k` into the RFANT source with `embed`: first through a lossy balun two-port, then through the coax two-port at its physical temperature, then through the RFANT switch path. `gamma_term` is the free-space antenna reflection.
@@ -163,10 +163,13 @@ Built by the generator from eigsim output; consumed by the forward model.
 | `s11`, `s12s21`, `s22` | `(n_freq,)` complex | Same layout as the rows of `switch_sparams.npz`: `[S11, S12·S21, S22]` |
 | `name` | str | For example `"RFANT"` or `"VNAANT"` |
 
-**Open:** which port faces P? Adapters must state it; the lab answer is Q-CGT-03.
+**Port convention:** cmt_vna `calkit`'s, which data-analysis's S11 chain (`scripts/calibrate_field_s11.py`) uses.
+- Γ' = S11 + S12·S21 Γ / (1 − S22 Γ): port 1 (`s11`) faces the reference side, and port 2 (`s22`) faces the termination.
+- The reference side is P for `RF*` paths and the VNA for `VNA*` paths.
+- Whether the lab measurements in `switch_sparams.npz` were taken in that orientation is Q-CGT-03.
 
 ### 5.3 `Reflection`
-The output of stage 2 (S11 calibration), consumed by stage 3.
+The output of stage 2 (S11 calibration), consumed by stage 3. data-analysis owns stage 2, and its D5 adapter builds this object (§ 6).
 
 | Field | Shape | Notes |
 |---|---|---|
@@ -253,6 +256,12 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
 - **`CalibratedSpectrum.t_ant_k` is not eigsim's `t_ant_k`.** It is the RFANT source temperature at P, covering the antenna, balun, coax and RFANT switch path (§ 3). Measured S-parameters can remove the switch path; nothing can remove the balun and coax. To compare with simulations, stage 5 forward-models them and marginalises over their priors (§ 4.3).
 - 3a comes before 3b because the model is bilinear in gain and noise waves. The v0 validation (§ 10) must compare the two-stage result with a joint fit on synthetic data, to measure what the split costs.
 
+**Stage 2 (S11 calibration) lives in data-analysis, not in eigsep_cal** (CHB, 2026-09-13; Q-CHB-31).
+- `scripts/calibrate_field_s11.py` already runs the chain with cmt_vna `calkit`: raw → internal open/short/load (`vna` plane) → de-embed the `VNA*` path (`dut`) → embed the `RF*` path (`lna`, which is P).
+- Keeping one implementation matters: Q-CGT-04 shows two versions of this calibration disagreeing by \|ΔΓ\| ≈ 0.06–0.3.
+- The chain gives point estimates. The D5 adapter wraps the `lna` plane as `Reflection` and supplies `gamma_cov` from two sources: the scatter between repeat captures, and Monte Carlo through the same chain with perturbed inputs (standard models, switch-path S-parameters, resampling onto correlator channels).
+- eigsep_cal's `embed` repeats the Γ cascade, because the forward model also needs T_s. The generator package tests it against `calkit.embed_sparams`, so the two cannot drift apart.
+
 ---
 
 ## 7. eigsim deliverables (track B)
@@ -262,9 +271,10 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
   - It does **not** add `receiver.temperature`.
   - Group samples by unique (elevation, azimuth) and simulate each group's times together. D5 orientations repeat: static at night, a raster on Jul 17.
   - The existing `simulate()` and its grid output stay unchanged.
-- **Rotation.** `drive_rotation_matrix` (`eigsim/rotations.py`) composes `R_X(el) @ R_Z(az)`, with azimuth *inner*. CHB believes the D5 mount is azimuth-*outer*, `R_Z(az) @ R_X(el)` (Q-CHB-23), which is also what gives the transmitter 2-D nadir coverage.
-  - Isolate the composition so that the flip is a one-line change.
-  - Flip it once the Jul 17 raster confirms the mount (workspace roadmap § 4).
+- **Rotation.** `drive_rotation_matrix` (`eigsim/rotations.py`) composes `R_X(el) @ R_Z(az)`, applied body→top.
+  - That is already the physical azimuth-outer mount (Aaron's top→body `R_Z(−az) R_X(−el)`), which gives the transmitter 2-D nadir coverage. Over the D5 raster grid it reaches 768/768 nside-8 pixels, against 55/768 for `R_Z(az) R_X(el)` (workspace logbook 2026-09-13; Q-CHB-23).
+  - **Do not flip it.** Stage 4 still confirms the composition from the Jul 17 raster (workspace roadmap § 4).
+  - Keep the composition in one place, so any change after that check is one line.
 - **Two antennas.** box-air (suspended) and box-gnd (on the ground) each get their own beam, horizon and ground-model level (§ 7.1) from config (Q-CHB-28).
   - **box-gnd** sits directly on the ground: the bowtie on a box identical to box-air's, then soil, with **no ground plane**.
   - Its orientation never changed during D5; the value is Q-ARP-01.
@@ -339,6 +349,7 @@ These never enter eigsep_cal:
   - `t_amb_k` comes from `tempctrl_load.T_now`. The reading counts, whatever the controller's drive state (Q-CHB-26).
   - `t_switch_k` comes from `rfswitch_therm`, after cleaning.
 - **S11 inputs.**
+  - Run stage 2 (`calibrate_field_s11.py`) and build `Reflection`, including `gamma_cov` (§ 6).
   - Resample from the 1000-point grid, carrying the resampling error.
   - The OSL keys are Q-CGT-01; the switch-path file is Q-CGT-02 and Q-CGT-03.
   - Remember the `load` = RFNOFF trap.
@@ -381,15 +392,16 @@ The generator must be able to switch on each of these effects independently, eve
 
 | Item | Needed by | Tracked |
 |---|---|---|
-| Rotation composition of the motor mount: CHB believes azimuth-outer; confirm from the Jul 17 raster, then flip eigsim (§ 7) | B | Q-CHB-23 (answered); stage-4 check |
+| Rotation composition of the motor mount. eigsim already implements the azimuth-outer mount, so do not flip it; stage 4 confirms it from the Jul 17 raster (§ 7) | Stage 4 | Q-CHB-23 (answered) |
 | box-gnd orientation value (setup settled, § 7) | B | Q-ARP-01 |
-| Packaging of the generator in mock_analysis. `rebuild` is on `EIGSEP/eigsep_cal`, so mock_analysis can take it as a git source. | A + B integration | Q-CHB-29 |
+| **Resolved (CHB, 2026-09-13):** the generator is its own mock_analysis workspace member. `rebuild` is on `EIGSEP/eigsep_cal`, so mock_analysis can take it as a git source. | A + B integration | Q-CHB-29 |
 | S-parameter port orientation and reference planes | A (`embed`), stage 2 | Q-CGT-03 |
-| Noise-source pad and ENR | A (priors, generator) | Q-CGT-05 |
+| Noise-source pad and ENR. Stand-in until answered: `obs_config.yaml`, ENR 35 dB behind a 30 dB pad (§ 4.3). | A (priors, generator) | Q-CGT-05 |
+| SP1 cable type and length. Its temperature was not logged (CHB), so the generator and fits use a prior. | Generator (§ 9 SP1 S-parameters); § 10 held-out SP1 check | Q-CGT-06 |
 | Balun and balun–switch coax model and priors. The coax was destroyed, so D5 has no measurement. | Generator; stage 5 comparisons with simulations | Q-CGT-10; IMP-05 (future deployments) |
 | `Tgnd` prior, and whether it varies with time. D5 recorded no ground temperature. | B (G1) | IMP-37 |
 | Marjum soil parameters (eps_r, resistivity) and terrain types per DEM facet. eigsep_terrain's `TERRAIN_TYPES` are generic. | B (G2, G3) | — |
-| Phase reference point of `beam_cart`, which sets the G3 delays (§ 7.1) | B (G3) | CHB asking Bahram |
+| Phase reference point of `beam_cart`, which sets the G3 delays (§ 7.1) | B (G3) | With Bahram Khalichi; noted in Q-BK-01 |
 | Interpolating `beam_cart`, phase included, from 3.906 MHz and nside 32 to the D5 channel grid and eigsim's resolution | B (G3) | — |
 | **Resolved (CHB, 2026-09-13):** eigsim's beam. v000 differed from the Oct 2025 beam above about 150 MHz (pattern correlation 0.33 at 246 MHz). eigsim now defaults to v001: \|E\|² from `beam_cart`, normalised to directivity, on the 52 native channels (config `eigsep`), with a cubic-spline 1 MHz version (config `eigsep_1mhz`). The instrument paper's simulations (`horizon_position`, `horizon_chromaticity`) pin config `eigsep_v000`, so their figures reproduce; rerunning the paper with v001 is a separate task. mock_analysis branch `feat/eigsim-oct2025-beam`. | B | — |
 | Which antenna position and height `horizon_mwss.npz` was computed for; horizons for box-air's D5 heights and for box-gnd | B | Q-CHB-05 (heights) |
@@ -424,3 +436,17 @@ The generator must be able to switch on each of these effects independently, eve
 - **v0, 2026-09-13 (same day, before any consumer):** eigsim switched to the v001 beam, on native channels or 1 MHz, with the paper's studies pinned to v000. The default eigsim grid is now a subset of the D5 channels.
 
   Sections changed: § 2, 7.1, 11.
+- **v0, 2026-09-13 (same day, before any consumer):** CHB's answers recorded.
+  - The generator is its own mock_analysis workspace member (Q-CHB-29).
+  - v0 stage solvers are closed-form Gaussian in NumPy.
+  - The noise source uses `obs_config.yaml` as a stand-in: ENR 35 dB behind a 30 dB pad (Q-CGT-05).
+  - The SP1 cable temperature was not logged (Q-CGT-06).
+  - `SParams` adopt cmt_vna `calkit`'s port convention; Q-CGT-03 now only confirms the lab orientation.
+
+  Sections changed: § 1, 4.3, 5.2, 11.
+- **v0, 2026-09-13 (same day, before any consumer):** stage 2 (S11 calibration) belongs to data-analysis (Q-CHB-31). Its D5 adapter builds `Reflection` with a covariance from repeat-capture scatter and Monte Carlo through the same chain, and eigsep_cal's `embed` is tested against `calkit`.
+
+  Sections changed: § 5.3, 6, 8.
+- **v0, 2026-09-13 (same day, before any consumer):** eigsim's rotation is already the physical azimuth-outer mount, so § 7 no longer asks for a flip (workspace logbook 2026-09-13, Q-CHB-23). The beam phase-reference question is tracked in Q-BK-01.
+
+  Sections changed: § 7, 11.
