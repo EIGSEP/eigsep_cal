@@ -72,12 +72,18 @@ Items marked **Open** need a decision before code depends on them. Once a consum
 
 | State | Physical source behind its path | T_s at P from | VNA key | VNA path |
 |---|---|---|---|---|
-| `RFANT` | antenna, via the balun–switch coax | `SkyTemperature` through the antenna-side network | `ant` | VNAANT |
+| `RFANT` | antenna, balun and balun–switch coax, as one source (see below) | `SkyTemperature` through balun and coax (generator only, § 4.3), then the RFANT path | `ant` | VNAANT |
 | `RFAMB` | 50 Ω ambient load | load temperature | `amb` | VNAAMB |
 | `RFNON` | noise diode on, behind the pad | diode excess plus pad (§ 4.3) | `noise` | VNANON |
 | `RFNOFF` | noise diode off, behind the pad | pad/diode physical temperature | `load` | VNANOFF |
 | `RFSP1_SHORT`, `RFSP1_OPEN` | long coax ending in a short or open | cable temperature | `sp1_short`, `sp1_open` | VNASP1 |
 | receiver | LNA input | — | `rec` (in `recs11`) | VNARF |
+
+**The antenna includes the balun and the balun–switch coax** (CHB, 2026-09-13)
+- The switch comes after the coax from the antenna balun. The S11 chain and the in-situ calibration de-embed only switch paths, so for both of them the coax is part of the antenna. The measured Γ_ant includes the balun and coax, and so does the calibrated antenna temperature (§ 6).
+- The beam models (HFSS, eigsim) are free space: no balun loss and no coax. eigsim's `t_ant_k` (§ 5.1) therefore sits at a different plane from anything eigsep_cal measures or calibrates.
+- The coax was destroyed when the telescope fell at the end of D5, so its S-parameters can never be measured.
+- **This is fine for calibration.** No D5 fit needs these S-parameters. It only makes comparisons with simulations harder: the generator (§ 4.3) and stage 5 must model the balun and coax, using priors instead of measurements.
 
 **Traps and scope**
 - The VNA key `load` is the noise diode **off** (`cmt_vna.VNA.measure_ant` switches to VNANOFF). The ambient load is `amb`.
@@ -122,6 +128,10 @@ In the generator, any of these may be a function of a named covariate from `Obse
   - Behind a matched pad with loss factor L ≥ 1 at physical temperature T_pad, the source temperature before the path is (T_diode + T_ex) / L + (1 − 1/L) · T_pad.
   - The D5 ENR and pad values are open (Q-CGT-05).
 - **Fits never need this.** They use M003's effective constants T_NS and T_L (eq. `TNSTL`), with a prior on T_NS.
+- **Balun and coax** (generator only).
+  - The generator turns eigsim's free-space `t_ant_k` into the RFANT source with `embed`: first through a lossy balun two-port, then through the coax two-port at its physical temperature, then through the RFANT switch path. `gamma_term` is the free-space antenna reflection.
+  - Neither two-port has a D5 measurement (§ 3). Draw their parameters from a prior (cable type and length, datasheet loss, balun loss, cable temperature) and record the draw in `provenance`.
+  - Fits never need them, because the measured Γ_ant already includes both.
 
 ### 4.4 Noise
 - **Radiometer noise.** Per sample, σ² = P² / (B_eff · τ · n_int).
@@ -139,7 +149,7 @@ Built by the generator from eigsim output; consumed by the forward model.
 
 | Field | Shape | Notes |
 |---|---|---|
-| `t_ant_k` | `(n_time, n_freq)` | Available noise temperature at the antenna terminals: everything eigsim models (sky, ground, horizon). **No receiver term.** The balun and everything after it belong to eigsep_cal. |
+| `t_ant_k` | `(n_time, n_freq)` | Available noise temperature at the terminals of the free-space antenna model: everything eigsim models (sky, ground, horizon). **No receiver term, no balun loss, no coax.** The generator adds the balun and everything after it with eigsep_cal's `embed` (§ 4.3). This is not the plane of a calibrated spectrum (§ 3). |
 | `freqs_mhz` | `(n_freq,)` | |
 | `times_unix` | `(n_time,)` | |
 | `antenna` | str | `"box-air"` or `"box-gnd"` |
@@ -160,7 +170,7 @@ The output of stage 2 (S11 calibration), consumed by stage 3.
 
 | Field | Shape | Notes |
 |---|---|---|
-| `gamma` | `(n_meas, n_freq)` complex | At P |
+| `gamma` | `(n_meas, n_freq)` complex | At P. For `RFANT` it includes the balun and coax (§ 3). |
 | `gamma_cov` | `(n_meas, n_freq, 2, 2)` | Covariance of (Re, Im) |
 | `times_unix` | `(n_meas,)` | Measurement time: S11 `metadata_snapshot_unix`, not the filename |
 | `source` | str | A § 3 state name, or `"receiver"` |
@@ -240,6 +250,7 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
   - `flags`, `antenna`, `freqs_mhz`, `times_unix`, `provenance`.
 
   It is the input to stage 5.
+- **`CalibratedSpectrum.t_ant_k` is not eigsim's `t_ant_k`.** It is the RFANT source temperature at P, covering the antenna, balun, coax and RFANT switch path (§ 3). Measured S-parameters can remove the switch path; nothing can remove the balun and coax. To compare with simulations, stage 5 forward-models them and marginalises over their priors (§ 4.3).
 - 3a comes before 3b because the model is bilinear in gain and noise waves. The v0 validation (§ 10) must compare the two-stage result with a joint fit on synthetic data, to measure what the split costs.
 
 ---
@@ -254,7 +265,7 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
 - **Rotation.** Keep `drive_rotation_matrix` for now. Isolate the composition so that the answer to Q-CHB-23 is a one-line change, not a refactor.
 - **Two antennas.** box-air (suspended) and box-gnd (on the ground) each get their own beam, horizon and ground treatment from config (Q-CHB-28).
 - **Frequencies.** Accept an arbitrary frequency array, in particular the D5 channel grid.
-- **Output.** float64, documented as the `t_ant_k` of `SkyTemperature` (§ 5.1).
+- **Output.** float64, documented as the `t_ant_k` of `SkyTemperature` (§ 5.1). It describes the free-space antenna; balun and coax effects belong to the generator, not eigsim (§ 3).
 - **Tests.**
   - At matching (orientation, time) samples, path mode equals grid mode minus the receiver term.
   - Grouping by unique orientation gives the same result as running each sample separately.
@@ -291,6 +302,7 @@ The generator must be able to switch on each of these effects independently, eve
 - The intrinsic parameterisation with a drifting measured Γ_rec(t).
 - Drifting path-gain ratios r_s.
 - Full SP1 cable S-parameters, with the ripple.
+- The balun and balun–switch coax, with parameters drawn from a prior (§ 4.3). The fits see them only through Γ_ant.
 - The 1 MHz comb as an additive A_s (box-air only, state-independent).
 - int32 wrap clipping.
 - Dropped integrations.
@@ -322,6 +334,7 @@ The generator must be able to switch on each of these effects independently, eve
 | Home of the generator in mock_analysis, and how mock_analysis depends on the unpushed eigsep_cal | A + B integration | Q-CHB-29 |
 | S-parameter port orientation and reference planes | A (`embed`), stage 2 | Q-CGT-03 |
 | Noise-source pad and ENR | A (priors, generator) | Q-CGT-05 |
+| Balun and balun–switch coax model and priors. The coax was destroyed, so D5 has no measurement. | Generator; stage 5 comparisons with simulations | Q-CGT-10; IMP-05 (future deployments) |
 | SNAP channel equivalent noise bandwidth and neighbour correlation | A (noise model) | Analysis to-do, from the PFB taps in the firmware |
 | Latent switch state for `MISSING` rows | v1 | — |
 | Structured or sparse covariance for large blocks (dense above ~10⁴ parameters is too big) | v1 | — |
@@ -330,3 +343,4 @@ The generator must be able to switch on each of these effects independently, eve
 
 ## 12. Changelog
 - **v0, 2026-09-13:** first draft.
+- **v0, 2026-09-13 (same day, before any consumer):** the RFANT source includes the balun and the unmeasurable balun–switch coax, while the beam models are free space (§ 3, 4.3, 5.1, 5.3, 6, 7, 9, 11).
