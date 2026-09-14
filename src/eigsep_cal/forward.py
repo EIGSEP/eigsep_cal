@@ -71,6 +71,7 @@ def power(sources, receiver, state, times_unix, additive=None):
             f"{state.shape} and {times.shape}"
         )
     additive = additive or {}
+    v.states("additive", list(additive))
     t_unc, t_cos, t_sin, t0 = receiver.rogers_bowman()
 
     out = np.empty((n_time, n_freq))
