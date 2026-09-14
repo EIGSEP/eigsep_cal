@@ -97,6 +97,19 @@ class Reflection:
             times_unix=_series("times_unix", self.times_unix, n_meas),
         )
 
+    def save(self, path):
+        """Write to an npz file (spec § 5.6)."""
+        from . import io
+
+        io.save(self, path)
+
+    @classmethod
+    def load(cls, path):
+        """Read an npz file written by :meth:`save`."""
+        from . import io
+
+        return io.load(path, cls)
+
 
 @dataclass(frozen=True, kw_only=True)
 class Observation:
@@ -184,3 +197,16 @@ class Observation:
     @property
     def n_freq(self):
         return self.power.shape[1]
+
+    def save(self, path):
+        """Write to an npz file (spec § 5.6)."""
+        from . import io
+
+        io.save(self, path)
+
+    @classmethod
+    def load(cls, path):
+        """Read an npz file written by :meth:`save`."""
+        from . import io
+
+        return io.load(path, cls)
