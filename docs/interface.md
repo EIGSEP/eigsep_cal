@@ -58,7 +58,7 @@ Items marked **Open** need a decision before code depends on them. Once a consum
 - **Resampling happens upstream.** For example, adapters map the 1000-point S11 grid onto correlator channels, and the input's uncertainty carries the interpolation error.
 - **D5 channel grid:** `f_k = k * 250 / 1024` MHz for k = 0…1023, so Δν = 0.244140625 MHz (`eigsep_observing.utils.calc_freqs_dfreq`).
 - **Synthetic D5 studies use a subset of these channels** and carry the integer channel indices (`chan`), so results compare with data channel by channel.
-- eigsim's default grid (50–250 MHz in 1 MHz steps) is not a subset, so D5 mode passes the channel grid explicitly.
+- eigsim's default grid (config `eigsep`) is the 52 channels its beam was simulated at, k = 192, 208, …, 1008, so it is a subset. The `eigsep_1mhz` grid (50–246 MHz, 1 MHz steps) is not, and the pinned `eigsep_v000` grid is not either.
 
 ---
 
@@ -149,12 +149,12 @@ Built by the generator from eigsim output; consumed by the forward model.
 
 | Field | Shape | Notes |
 |---|---|---|
-| `t_ant_k` | `(n_time, n_freq)` | Available noise temperature at the terminals of the free-space antenna model: everything eigsim models (sky, ground, horizon). **No receiver term, no balun loss, no coax.** The generator adds the balun and everything after it with eigsep_cal's `embed` (§ 4.3). This is not the plane of a calibrated spectrum (§ 3). |
+| `t_ant_k` | `(n_time, n_freq)` | Available noise temperature at the terminals of the free-space antenna model: everything eigsim models, meaning sky, horizon, and ground at the level recorded in `meta` (§ 7.1). **No receiver term, no balun loss, no coax.** The generator adds the balun and everything after it with eigsep_cal's `embed` (§ 4.3). This is not the plane of a calibrated spectrum (§ 3). |
 | `freqs_mhz` | `(n_freq,)` | |
 | `times_unix` | `(n_time,)` | |
 | `antenna` | str | `"box-air"` or `"box-gnd"` |
 | `elevation_deg`, `azimuth_deg` | `(n_time,)` | Drive angles per sample; provenance only |
-| `meta` | dict | eigsim version, config, beam, horizon and sky model |
+| `meta` | dict | eigsim version, config, beam, horizon and sky model; `ground_level` and every drawn ground parameter (§ 7.1) |
 
 ### 5.2 `SParams`
 
@@ -265,15 +265,62 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
 - **Rotation.** `drive_rotation_matrix` (`eigsim/rotations.py`) composes `R_X(el) @ R_Z(az)`, with azimuth *inner*. CHB believes the D5 mount is azimuth-*outer*, `R_Z(az) @ R_X(el)` (Q-CHB-23), which is also what gives the transmitter 2-D nadir coverage.
   - Isolate the composition so that the flip is a one-line change.
   - Flip it once the Jul 17 raster confirms the mount (workspace roadmap § 4).
-- **Two antennas.** box-air (suspended) and box-gnd (on the ground) each get their own beam, horizon and ground treatment from config (Q-CHB-28).
+- **Two antennas.** box-air (suspended) and box-gnd (on the ground) each get their own beam, horizon and ground-model level (§ 7.1) from config (Q-CHB-28).
   - **box-gnd** sits directly on the ground: the bowtie on a box identical to box-air's, then soil, with **no ground plane**.
   - Its orientation never changed during D5; the value is Q-ARP-01.
-  - Start from the HFSS free-space bowtie beam, the best model available. Ground coupling is not simulated.
+  - Start from the HFSS free-space bowtie beam, the best model available. Ground coupling is not simulated (G4, § 7.1).
 - **Frequencies.** Accept an arbitrary frequency array, in particular the D5 channel grid.
 - **Output.** float64, documented as the `t_ant_k` of `SkyTemperature` (§ 5.1). It describes the free-space antenna; balun and coax effects belong to the generator, not eigsim (§ 3).
 - **Tests.**
   - At matching (orientation, time) samples, path mode equals grid mode minus the receiver term.
   - Grouping by unique orientation gives the same result as running each sample separately.
+
+### 7.1 Ground model levels
+
+eigsim today (G0) treats every direction below the horizon as a uniform blackbody: `T_ant = T_sky,above + fgnd · Tgnd`, with one `ground.temperature` of 300 K for all times, frequencies, directions and antennas (`eigsim/simulate.py`). croissant supports only a constant `Tgnd` and includes no scattering of the sky by the ground.
+
+| Level | What directions below the horizon contribute | Reflection ripple | Needs |
+|---|---|---|---|
+| G0 | Uniform blackbody at one `Tgnd`; emissivity 1; no reflection. Current eigsim. | none | — |
+| G1 | G0, with `Tgnd` drawn from a prior, optionally a function of time, and set per antenna | none | A `Tgnd` prior: D5 recorded no ground temperature (IMP-37) |
+| G2 | Incoherent soil: emission (1 − \|R\|²) · T_phys, plus reflected sky power \|R\|² · T_sky from the specular direction. R depends on incidence angle, polarisation and soil. | none | Oblique-incidence, two-polarisation reflectivity (eigsep_terrain's `reflectivity.py` is normal incidence only); facet normals from the DEM |
+| G3 | Coherent terrain multipath: direct and reflected waves from the same sky direction add as voltages, with each terrain pixel's excess delay | yes | The complex far-field pattern, `beam_cart` (below); eigsim's beam file holds power only (`bm`, float64). Per-pixel terrain distance (`horizon_mwss.npz`) and ray tracing (eigsep_terrain) |
+| G4 | box-gnd only: soil in the antenna's near field changes the beam and its efficiency | — | EM simulation of bowtie, box and soil |
+
+- **G0 to G3 are cumulative.** G4 replaces box-gnd's free-space beam.
+- **Only G3 adds reflection ripple.**
+  - A wave from sky direction n reaches the antenna directly, and again after reflection, from a direction n′ below the horizon with excess delay τ.
+  - The response is |F(n) + R F(n′) e^{−2πiντ}|² T_sky(n), where F is the complex far-field pattern. Only the cross term ripples in frequency.
+  - A power beam cannot represent the cross term; G2 keeps only |R F(n′)|².
+- **Beam for G3** (found 2026-09-13).
+  - `data-analysis/hfss_beam_maps/bowtie_beam.npz` holds `beam_cart`: complex Cartesian (Ex, Ey, Ez) in mV at 1 W incident power, plus `gain_th` and `gain_ph`. `beam_cart` is the same array as Dominic's `bowtie_beams_cart.npz`, which lacks the frequency and nside keys.
+  - Grid: HEALPix nside 32 (about 1.8°); 52 frequencies from 46.875 to 246.09 MHz, 3.906 MHz apart (every 16th correlator channel). These are the transmitter frequencies: Bahram simulated them so Dominic could compare the beam with field measurements (CHB).
+  - It is eigsim's default beam since 2026-09-13 (v001, § 11).
+  - \|E\|² matches the shape of `gain_th + gain_ph` to better than 0.9 % of the peak at every frequency. Their ratio varies with frequency (1.96 at 47 MHz, 1.01–1.20 above), so use one representation, never a mix.
+  - The integral of `tot_g` (gain from \|E\|²) stays below 4π and roughly tracks the Oct 2025 bowtie mismatch loss, as a realized gain should. E is transverse to within 0.7 %.
+  - It is the same beam as BK's Oct 2025 bowtie-on-box simulation behind the instrument paper's `beam_maps.npz`: pattern correlation 0.999, 1.000 and 0.986 at 50, 150 and 250 MHz.
+- **Flat-floor intuition.** For a floor a height h below the antenna, τ = 2h cos θ / c for a source at zenith angle θ. That is about 587 ns at h = 88 m and θ = 0, and it falls toward grazing, where the finite floor and the canyon walls set the geometry instead. Reflections therefore spread over a range of delays, not a single spike.
+- **Record the level.** `SkyTemperature.meta` carries `ground_level` and every drawn ground parameter (`Tgnd`, soil type, eps_r, resistivity).
+- **`correct_ground_loss` holds only at G0 and G1.** From G2 on, the ground term depends on the sky, so it is no longer `fgnd · Tgnd`.
+- **Stages 3a and 3b never see the ground.** RFANT enters them as data, so § 9 and § 10 do not vary the level. The level matters for stage 5 and for § 7.2.
+- **Order.** Path mode ships at G0. G1 is needed before stage 5 compares simulations with data, and G3 before § 7.2.
+
+### 7.2 Delay-filter check (box-air)
+
+**Hypothesis** (CHB, 2026-09-13): box-air's terrain reflections can be removed with a delay filter, leaving spectra that a G0 or G1 model describes. box-gnd is not expected to pass (G4) and is not part of the check.
+
+**Method** (a mock_analysis study; no receiver and no generator)
+- Simulate box-air in path mode at G3 and at G2, with the same sky, beam, horizon, orientations, times and soil draw.
+- Use the D5 channel grid (§ 2). Its alias-free delay limit is 1/(2Δν) ≈ 2048 ns. eigsim's default 1 MHz grid stops at 500 ns, below the ≈ 587 ns floor reflection.
+- Apply the stage 5 delay filter (hera_filters DPSS or DAYENU) to both, with the data's flags, including the comb-mask gaps. "Filtered" below means the component the filter keeps.
+- Report, as a function of delay cutoff, LST, orientation and height (≈ 88 m, and lower on Jul 15, Q-CHB-05):
+  - **reflection leakage:** filtered G3 − filtered G2, the reflection that survives the filter;
+  - **filter damage:** G2 − filtered G2, the structure the filter removes from a spectrum without reflections.
+- Repeat over soil draws, since the D5 soil parameters are unknown.
+
+**Outcome**
+- **Pass** (both below the threshold, § 11): stage 5 compares filtered box-air data with filtered G1 simulations.
+- **Fail:** stage 5 needs the G3 forward model, marginalised over soil priors.
 
 ---
 
@@ -340,6 +387,14 @@ The generator must be able to switch on each of these effects independently, eve
 | S-parameter port orientation and reference planes | A (`embed`), stage 2 | Q-CGT-03 |
 | Noise-source pad and ENR | A (priors, generator) | Q-CGT-05 |
 | Balun and balun–switch coax model and priors. The coax was destroyed, so D5 has no measurement. | Generator; stage 5 comparisons with simulations | Q-CGT-10; IMP-05 (future deployments) |
+| `Tgnd` prior, and whether it varies with time. D5 recorded no ground temperature. | B (G1) | IMP-37 |
+| Marjum soil parameters (eps_r, resistivity) and terrain types per DEM facet. eigsep_terrain's `TERRAIN_TYPES` are generic. | B (G2, G3) | — |
+| Phase reference point of `beam_cart`, which sets the G3 delays (§ 7.1) | B (G3) | CHB asking Bahram |
+| Interpolating `beam_cart`, phase included, from 3.906 MHz and nside 32 to the D5 channel grid and eigsim's resolution | B (G3) | — |
+| **Resolved (CHB, 2026-09-13):** eigsim's beam. v000 differed from the Oct 2025 beam above about 150 MHz (pattern correlation 0.33 at 246 MHz). eigsim now defaults to v001: \|E\|² from `beam_cart`, normalised to directivity, on the 52 native channels (config `eigsep`), with a cubic-spline 1 MHz version (config `eigsep_1mhz`). The instrument paper's simulations (`horizon_position`, `horizon_chromaticity`) pin config `eigsep_v000`, so their figures reproduce; rerunning the paper with v001 is a separate task. mock_analysis branch `feat/eigsim-oct2025-beam`. | B | — |
+| Which antenna position and height `horizon_mwss.npz` was computed for; horizons for box-air's D5 heights and for box-gnd | B | Q-CHB-05 (heights) |
+| Delay cutoff and pass threshold for the delay-filter check, for example against radiometer noise or the calibration uncertainty of the averaged spectrum | Stage 5 (§ 7.2) | — |
+| box-gnd soil-coupling EM simulation | B (G4) | — |
 | SNAP channel equivalent noise bandwidth and neighbour correlation | A (noise model) | Analysis to-do, from the PFB taps in the firmware |
 | Latent switch state for `MISSING` rows | v1 | — |
 | Structured or sparse covariance for large blocks (dense above ~10⁴ parameters is too big) | v1 | — |
@@ -356,3 +411,16 @@ The generator must be able to switch on each of these effects independently, eve
   - The singular-OSL question is now Q-CGT-09.
   
   Sections changed: § 1, 7, 8, 11.
+- **v0, 2026-09-13 (same day, before any consumer):** ground model levels G0–G4 (§ 7.1) and the box-air delay-filter check (§ 7.2), agreed with CHB.
+  - eigsim today is G0: a uniform 300 K blackbody below the horizon, with no reflections.
+  - Only coherent multipath (G3) produces reflection ripple, and it needs a complex beam.
+  - `SkyTemperature.meta` records the level.
+  - New open items: `Tgnd` prior, soil parameters, complex HFSS pattern, horizon positions, the check's threshold, box-gnd EM simulation.
+
+  Sections changed: § 5.1, 7, 11.
+- **v0, 2026-09-13 (same day, before any consumer):** complex beam for G3 located and checked (§ 7.1). eigsim's v000 beam disagrees with it above about 150 MHz. New open items: phase reference, interpolation, choice of the D5-mode beam.
+
+  Sections changed: § 7.1, 11.
+- **v0, 2026-09-13 (same day, before any consumer):** eigsim switched to the v001 beam, on native channels or 1 MHz, with the paper's studies pinned to v000. The default eigsim grid is now a subset of the D5 channels.
+
+  Sections changed: § 2, 7.1, 11.
