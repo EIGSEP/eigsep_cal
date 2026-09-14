@@ -172,6 +172,17 @@ class TestPower:
         np.testing.assert_allclose(got[[0, 2]], base[[0, 2]] + comb)
         np.testing.assert_array_equal(got[1], base[1])
 
+    def test_additive_rejects_unknown_state(self):
+        comb = np.linspace(1.0, 2.0, N_FREQ)
+        with pytest.raises(ValueError, match="RFant"):
+            power(
+                _sources(),
+                _receiver(),
+                STATE,
+                TIMES,
+                additive={"RFant": comb},
+            )
+
     def test_per_time_source_equals_broadcast(self):
         src = _sources()
         tiled = {
