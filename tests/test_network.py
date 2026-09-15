@@ -11,17 +11,46 @@ def _sp(s11, s12s21, s22, name="test"):
     return SParams(s11 * ones, s12s21 * ones, s22 * ones, name)
 
 
+def _symmetric(theta, e1, e2, name):
+    """Reciprocal S = O diag(e1, e2) O^T, with O a rotation by theta."""
+    c, s = np.cos(theta), np.sin(theta)
+    s11 = c * c * e1 + s * s * e2
+    s22 = s * s * e1 + c * c * e2
+    s12 = c * s * (e1 - e2)
+    return SParams(s11, s12**2, s22, name)
+
+
 def _lossless_reciprocal(rng, n):
     """Random symmetric unitary S = O diag(d1, d2) O^T, well conditioned."""
     theta = rng.uniform(0.3, 1.2, n)
-    c, s = np.cos(theta), np.sin(theta)
     phi1 = rng.uniform(0, 2 * np.pi, n)
     phi2 = phi1 + rng.uniform(1.0, 5.0, n)
     d1, d2 = np.exp(1j * phi1), np.exp(1j * phi2)
-    s11 = c * c * d1 + s * s * d2
-    s22 = s * s * d1 + c * c * d2
-    s12 = c * s * (d1 - d2)
-    return SParams(s11, s12**2, s22, "lossless")
+    return _symmetric(theta, d1, d2, "lossless")
+
+
+def _lossy_reciprocal(rng, n):
+    """Random reciprocal, strictly passive S with |S12| kept off zero.
+
+    Singular values in [0.3, 0.9] make every path lossy, so its
+    available gain is strictly below 1. The mixing angle and phase gap
+    keep |S12| >= 0.08, so the gain is also well above 0.
+    """
+    theta = rng.uniform(0.3, 1.2, n)
+    phi1 = rng.uniform(0, 2 * np.pi, n)
+    phi2 = phi1 + rng.uniform(1.0, 5.0, n)
+    sv1, sv2 = rng.uniform(0.3, 0.9, (2, n))
+    e1, e2 = sv1 * np.exp(1j * phi1), sv2 * np.exp(1j * phi2)
+    return _symmetric(theta, e1, e2, "lossy")
+
+
+def _random_gamma(rng, n, radius=0.9):
+    """Reflection coefficients uniform over the disc |Gamma| < radius."""
+    return (
+        radius
+        * np.sqrt(rng.uniform(0, 1, n))
+        * np.exp(2j * np.pi * rng.uniform(0, 1, n))
+    )
 
 
 class TestSParams:
@@ -81,6 +110,34 @@ class TestEmbed:
             / (np.abs(1 - sp.s11 * gamma_t) ** 2 * (1 - np.abs(gamma_s) ** 2))
         )
         assert np.max(np.abs(wrong - 1)) > 1e-2
+
+    @pytest.mark.parametrize(
+        "t_term, t_path", [(5000.0, 300.0), (4.0, 300.0)], ids=["hot", "cold"]
+    )
+    def test_lossy_path_moves_termination_toward_path(self, t_term, t_path):
+        """Pin the direction: embed, never de-embed.
+
+        Embedding gives T_s - T_p = G (T_t - T_p), so through a lossy
+        path (0 < G < 1) T_s lies strictly between T_t and T_p, whatever
+        the port labels. De-embedding, T_t = (T_s - (1 - G) T_p) / G,
+        would carry T_s past T_t, away from T_p: a ratio 1/G > 1 below.
+        """
+        rng = np.random.default_rng(3)
+        n = 500
+        sp = _lossy_reciprocal(rng, n)
+        gamma_t = _random_gamma(rng, n)
+
+        _, t_s = embed(gamma_t, t_term, sp, t_path)
+
+        # Fraction of the termination's excess over T_p that survives.
+        ratio = (t_s - t_path) / (t_term - t_path)
+        bad = (ratio <= 0) | (ratio >= 1)
+        assert not bad.any(), (
+            f"T_s is outside (T_p, T_t) for {bad.sum()} of {n} lossy "
+            f"paths: (T_s - T_p) / (T_t - T_p) spans "
+            f"[{ratio.min():.3g}, {ratio.max():.3g}], expected inside "
+            f"(0, 1). Is embed de-embedding?"
+        )
 
     def test_equal_temperatures_are_preserved(self):
         rng = np.random.default_rng(2)
