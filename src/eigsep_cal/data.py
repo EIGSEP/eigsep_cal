@@ -10,6 +10,12 @@ from .conventions import ANTENNAS, STATES, d5_freqs_mhz
 
 REFLECTION_SOURCES = STATES + ("receiver",)
 
+# Tolerance of the gamma_cov checks, relative to the largest entry of
+# each 2x2 block. Roundoff in J C J^T is a few eps (~1e-16), and a real
+# asymmetry is of order one; np.random.multivariate_normal checks
+# covariances to the same 1e-8.
+_COV_RTOL = 1e-8
+
 
 def _set(obj, **values):
     for key, value in values.items():
@@ -80,7 +86,11 @@ class Reflection:
         n_meas = gamma.shape[0]
         cov = v.float_array("gamma_cov", self.gamma_cov, ndim=4)
         v.check_shape("gamma_cov", cov, (n_meas, freqs.size, 2, 2))
-        if not np.array_equal(cov[..., 0, 1], cov[..., 1, 0]):
+        if not np.all(np.isfinite(cov)):
+            raise ValueError("gamma_cov must be finite")
+        scale = np.max(np.abs(cov), axis=(-2, -1), keepdims=True)
+        unit = cov / np.where(scale > 0, scale, 1.0)
+        if np.any(np.abs(unit[..., 0, 1] - unit[..., 1, 0]) > _COV_RTOL):
             raise ValueError("gamma_cov must be symmetric")
         if np.any(cov[..., 0, 0] < 0) or np.any(cov[..., 1, 1] < 0):
             raise ValueError("gamma_cov variances must be >= 0")

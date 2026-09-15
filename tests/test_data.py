@@ -94,6 +94,39 @@ class TestReflection:
         with pytest.raises(ValueError, match="symmetric"):
             reflection(gamma_cov=cov)
 
+    def test_covariance_symmetric_to_roundoff_accepted(self):
+        """Stage 2 builds gamma_cov as J C J^T, which is symmetric only
+        to roundoff; the nextafter step makes that asymmetry certain."""
+        rng = np.random.default_rng(5)
+        jac = rng.normal(size=(2, FREQS.size, 2, 6))
+        root = rng.normal(size=(6, 6))
+        cov = jac @ (1e-6 * root @ root.T) @ np.swapaxes(jac, -1, -2)
+        cov[0, 0, 1, 0] = np.nextafter(cov[0, 0, 0, 1], np.inf)
+        reflection(gamma_cov=cov)
+
+    def test_covariance_asymmetry_beyond_roundoff_rejected(self):
+        cov = reflection().gamma_cov.copy()
+        cov[..., 0, 1] = cov[..., 1, 0] = 5e-7
+        cov[0, 0, 1, 0] *= 1 + 1e-6
+        with pytest.raises(ValueError, match="symmetric"):
+            reflection(gamma_cov=cov)
+
+    @pytest.mark.parametrize(
+        "index, bad",
+        [
+            ((0, 0, 0, 1), np.nan),
+            ((0, 0, 0, 0), np.nan),
+            ((1, 2, 1, 1), np.inf),
+        ],
+    )
+    def test_covariance_must_be_finite(self, index, bad):
+        """NaN off the diagonal used to report "symmetric", and NaN or
+        inf on it passed."""
+        cov = reflection().gamma_cov.copy()
+        cov[index] = bad
+        with pytest.raises(ValueError, match="finite"):
+            reflection(gamma_cov=cov)
+
     def test_grid_shape_checked(self):
         with pytest.raises(ValueError, match="gamma"):
             reflection(gamma=np.zeros((2, FREQS.size + 1)))
