@@ -1,6 +1,8 @@
 # EIGSEP D5 Memo M003: Receiver calibration — the equations to solve, their inputs, and what deployment 5 can support
 
 > Generated from `memos/M003_receiver_calibration/memo.tex` at manuscript commit `5b9a8fa` of the EIGSEP Deployment 5 analysis by `scripts/memo2md.py`. Do not edit by hand: change the LaTeX source and regenerate.
+>
+> Hand-edited in eigsep_cal on 2026-09-15 (PR #2 review): Section 3 (eqs. embed and availgain, port direction) and Section 8, item 3. The LaTeX source must carry the same change before this file is regenerated.
 
 ## Abstract
 
@@ -90,14 +92,24 @@ The equation assumes:
 
 5.  $T_s$ including any lossy path between the physical source and $\mathcal P$.
 
-For the last point, a termination at $T_t$ behind a path at $T_p$ has
+For the last point, take a termination with reflection coefficient $\Gamma_t$ and noise temperature $T_t$ behind a path at physical temperature $T_p$. Seen from $\mathcal P$, path and termination together are a source with
+
+```math
+\Gamma_s=S_{11}+\frac{S_{12}S_{21}\,\Gamma_t}{1-S_{22}\Gamma_t},\tag{embed}
+```
 
 ```math
 T_s=G\,T_t+(1-G)\,T_p,\qquad
-G=\frac{|S_{21}|^2(1-|\Gamma_t|^2)}{|1-S_{11}\Gamma_t|^2(1-|\Gamma_s|^2)}\tag{availgain}
+G=\frac{|S_{12}|^2(1-|\Gamma_t|^2)}{|1-S_{22}\Gamma_t|^2(1-|\Gamma_s|^2)}.\tag{availgain}
 ```
 
-(Monsalve et al. 2017, eqs. 8–9). REACH applies the same relation to every cabled calibrator (Roque et al. 2025).
+**Direction fixes the ports.** Both equations *embed*: they carry the termination outward through the path to what is seen looking into it from $\mathcal P$, and the port labels follow from that direction. Port 2 is the end the termination is attached to, port 1 is the end we look in from, and the signal crosses from port 2 to port 1. $G$ is the available gain along that crossing; for a reciprocal path $|S_{12}|^2=|S_{21}|^2=|S_{12}S_{21}|$.
+
+- *Sources.* $T_s=G\,T_t+(1-G)\,T_p$ is Monsalve et al. (2017) eq. 8 and holds in any labelling. Eqs. (embed) and (availgain) are Monsalve et al. (2024) eqs. 16 and 17, in the same labels (“port 1 (2) being the balun output (input)”); their eq. 17 is the balun efficiency, which takes a free-space antenna temperature through a lossy balun. Monsalve et al. (2017) eq. 9 prints the mirror image, with $S_{21}$ and $S_{11}$, because their port 1 carries the termination. It is the same gain, with the path read from the other end.
+
+- *Direction matters more than labels.* Putting $S_{11}$ where $S_{22}$ belongs in eq. (availgain) changes $G$ by a fraction $\approx2\operatorname{Re}[(S_{11}-S_{22})\Gamma_t]$: second order in small reflections, and zero for a symmetric path. Swapping the labels does not reverse the direction; the result still embeds, through the path turned round. Reversing the direction is de-embedding, $T_t=[T_s-(1-G)\,T_p]/G$. Used where eq. (availgain) belongs, it misplaces $T_s$ by $(1-G^2)(T_t-T_p)/G\approx2(1-G)(T_t-T_p)$, which is first order in the loss even for a matched path. Through a lossy path ($0<G<1$), embedding always puts $T_s$ strictly between $T_t$ and $T_p$.
+
+REACH applies the same relation to every cabled calibrator (Roque et al. 2025).
 
 ## 4. Reconciliation with Bucher et al. (2026)
 
@@ -439,7 +451,7 @@ Notebook `003` (section D), with `001`, gives the following:
 
 2.  Keep the standard noise-wave form. Run the intrinsic (Bucher) parameterisation, with coefficients from the measured $\Gamma_{\mathrm{rx}}(t)$, as a variant and compare the two fits.
 
-3.  Take $\mathcal P$ as the common LNA-side node of the switch network. Every state’s path is part of its source ($\Gamma_s$ by embedding, $T_s$ by eq. availgain). This makes the lab switch-path S-parameters a hard requirement for stage 2.
+3.  Take $\mathcal P$ as the common LNA-side node of the switch network. Every state’s path is part of its source ($\Gamma_s$ by eq. embed, $T_s$ by eq. availgain). This makes the lab switch-path S-parameters a hard requirement for stage 2.
 
 4.  For Deployment 5:
 
