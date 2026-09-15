@@ -8,7 +8,7 @@ Items marked **Open** need a decision before code depends on them. Once a consum
 
 **Background**
 - Calibration is staged and Bayesian. Each stage passes a posterior, not a point estimate; there is no single joint fit.
-- The physics and notation come from EIGSEP memo M003 (receiver calibration). Equation names below refer to its labels.
+- The physics follows EIGSEP memo M003 (receiver calibration), where it is derived and checked. Every equation used here is written out in § 4, under the memo's names (eq. Ps, eq. map, …), so this document stands on its own.
 - **Section numbers** match the Deployment 5 interface spec, which builds on this one and covers eigsim, the synthetic-data generator and the D5 adapters. Its sections 7–9 have no counterpart here.
 
 ---
@@ -44,8 +44,8 @@ Items marked **Open** need a decision before code depends on them. Once a consum
 
 ## 3. Reference plane and switch states
 
-**Reference plane P** is the common LNA-side node of the switch network (M003 § Decisions, item 3).
-- Every state's switch path is part of its source: Γ_s by embedding, T_s by eq. `availgain`.
+**Reference plane P** is the common LNA-side node of the switch network.
+- Every state's switch path is part of its source: Γ_s by embedding, T_s by eq. availgain (§ 4.3).
 - The receiver reflection Γ_rec is measured at P.
 
 **State names** follow `eigsep_observing.client.OBS_MODES`; the rfswitch paths are `picohost.base.PicoRFSwitch.PATHS`.
@@ -73,15 +73,27 @@ Items marked **Open** need a decision before code depends on them. Once a consum
 ## 4. Physics in the forward model
 
 ### 4.1 Power per state
-M003 eq. `Ps`, plus an additive post-switch term:
+For a switch state s whose signal reaches the amplifier through P:
 
 ```
 P_s(ν, t) = g_s(ν, t) · [ M_s T_s + |Γ_s F_s|² T_unc + Re(Γ_s F_s) T_cos
-                           + Im(Γ_s F_s) T_sin + T_0 ] + A_s(ν, t)
+                           + Im(Γ_s F_s) T_sin + T_0 ] + A_s(ν, t)        (eq. Ps)
+
+F_s = sqrt(1 − |Γ_rec|²) / (1 − Γ_s Γ_rec),    M_s = (1 − |Γ_s|²) |F_s|²    (eq. F)
 ```
 
-- F_s and M_s follow eq. `F`: F_s = sqrt(1 − |Γ_rec|²) / (1 − Γ_s Γ_rec), and M_s is the mismatch factor.
-- g_s = g · r_s, where r_s is a path-gain ratio. It is 1 by default; the generator can perturb it, since M003 needs stable ratios.
+- **Terms.**
+  - g is the gain referenced to P, and T_s is the available noise temperature of the source at P.
+  - M_s is the mismatch factor: delivered power over available power.
+  - T_0 is receiver noise delivered independently of the source. T_unc, T_cos and T_sin describe receiver noise emitted toward the source and reflected back, in parts uncorrelated and correlated with T_0.
+- **Provenance.** Without A_s this is Rogers & Bowman (2012) eq. 8 and Monsalve et al. (2017) eq. 2, since |Γ_s| |F_s| cos α = Re(Γ_s F_s) with α = arg(Γ_s F_s).
+- **Assumptions.**
+  - The receiver is linear.
+  - g, T_0 and the noise parameters are stable over one switching cycle.
+  - Source noise is uncorrelated with receiver noise.
+  - Switch positions not in use are perfectly isolated.
+  - T_s includes any lossy path between the physical source and P (eq. availgain, § 4.3).
+- g_s = g · r_s, where r_s is a path-gain ratio. It is 1 by default, and the generator can perturb it. Only gain changes common to all paths cancel in Q_s (eq. Q, § 4.5), so the fits need stable ratios.
 - A_s is zero in the v0 fit. The generator can switch it on, for example for a state-independent comb injected after the switch.
 
 ### 4.2 Receiver parameters: `ReceiverModel`
@@ -89,22 +101,44 @@ P_s(ν, t) = g_s(ν, t) · [ M_s T_s + |Γ_s F_s|² T_unc + Re(Γ_s F_s) T_cos
 | Field | Shape | Notes |
 |---|---|---|
 | `t_unc_k`, `t_cos_k`, `t_sin_k`, `t0_k` | `(n_freq,)` or `(n_time, n_freq)` | Rogers & Bowman parameterisation |
-| `t_r_k`, `t_l_k`, `c_k` | same; `c_k` complex | Intrinsic parameterisation (M003 eq. `map`). Use either this set or the row above, selected by `parameterisation`. |
+| `t_r_k`, `t_l_k`, `c_k` | same; `c_k` complex | Intrinsic parameterisation (eq. map, below). Use either this set or the row above, selected by `parameterisation`. |
 | `gamma_rec` | `(n_freq,)` or `(n_time, n_freq)` complex | Measured at sparse epochs; mapping onto samples is open (§ 11) |
 | `gain` | `(n_time, n_freq)` | Must be > 0 |
 | `path_gain_ratio` | `dict[state, (n_freq,)]` | Defaults to 1 |
 
 In the generator, any of these may be a function of a named covariate from `Observation.covariates`, for example a temperature coefficient.
 
+**Intrinsic parameterisation** (Bucher et al. 2026, arXiv:2607.26741, following Meys 1978). The amplifier is a noiseless two-port behind input-referred travelling-wave noise sources:
+- A_R moves into the amplifier and A_L moves toward the source;
+- T_R = ⟨|A_R|²⟩, T_L = ⟨|A_L|²⟩, and c = ⟨A_R* A_L⟩.
+
+They map onto the Rogers & Bowman set as
+
+```
+T_0             = (1 − |Γ_rec|²) T_R
+T_unc           = T_L + |Γ_rec|² T_R + 2 Re(Γ_rec c*)
+T_cos − i T_sin = 2 sqrt(1 − |Γ_rec|²) (c + Γ_rec T_R)                     (eq. map)
+```
+
+- The coefficients depend on Γ_rec only, never on Γ_s, so eq. Ps with eq. map is the same model in other coordinates.
+- The intrinsic set stays valid when Γ_rec changes through the amplifier's reverse transfer. The Rogers & Bowman set must then be re-mapped.
+- Bucher et al. print T_unc without the factor 2 in the cross term. That version fails the § 10 test.
+
 ### 4.3 Source temperatures
-- **Path embedding.** `embed(gamma_term, t_term_k, sparams, t_path_k) -> (gamma_s, t_s_k)`:
-  - Γ is cascaded through the two-port;
-  - T_s follows eq. `availgain`;
+- **Path embedding.** `embed(gamma_term, t_term_k, sparams, t_path_k) -> (gamma_s, t_s_k)` is for a termination (Γ_t, T_t) on port 2 of a path at physical temperature T_p (port convention § 5.2):
+
+  ```
+  Γ_s = S11 + S12·S21 Γ_t / (1 − S22 Γ_t)
+  T_s = G T_t + (1 − G) T_p,
+  G   = |S21|² (1 − |Γ_t|²) / ( |1 − S22 Γ_t|² (1 − |Γ_s|²) )               (eq. availgain)
+  ```
+
+  - G is the available gain of the path (Monsalve et al. 2017, eqs. 8–9).
   - |S21|² is taken as |S12·S21|, which assumes the path is reciprocal and passive.
 - **Noise source** (generator only).
   - Diode excess temperature: T_ex = 290 K · 10^(ENR/10).
   - Behind a matched pad with loss factor L ≥ 1 at physical temperature T_pad, the source temperature before the path is (T_diode + T_ex) / L + (1 − 1/L) · T_pad.
-- **Fits never need this.** They use M003's effective constants T_NS and T_L (eq. `TNSTL`), with a prior on T_NS.
+- **Fits never need this.** They use the effective constants T_NS and T_L (eq. TNSTL, § 4.5), with a prior on T_NS.
 - **Balun and coax** (generator only).
   - The generator turns a free-space `t_ant_k` into the RFANT source with `embed`: first through a lossy balun two-port, then through the coax two-port at its physical temperature, then through the RFANT switch path. `gamma_term` is the free-space antenna reflection.
   - Where the two-ports are not measured, their parameters are drawn from a prior (cable type and length, datasheet loss, balun loss, cable temperature), and the draw is recorded in `provenance`.
@@ -114,6 +148,43 @@ In the generator, any of these may be a function of a named covariate from `Obse
 - **Radiometer noise.** Per sample, σ² = P² / (B_eff · τ · n_int).
 - **Bandwidth.** `enbw_hz` defaults to Δν = 244 140.625 Hz, until the SNAP polyphase filterbank's equivalent noise bandwidth is measured (§ 11).
 - **Channel correlation.** Channels are independent in v0.
+
+### 4.5 Calibration equation (stage 3)
+Stage 3 removes the gain with two internal references, L = `RFAMB` (load) and N = `RFNON` (noise source on):
+
+```
+Q_s = (P_s − P_L) / (P_N − P_L)                                              (eq. Q)
+```
+
+Write P_L = g_L D_L and P_N = g_N D_N, where D is the bracket of eq. Ps for each reference on its own path. Dividing by g (1 − |Γ_rec|²) gives, for every source s:
+
+```
+T_s (1 − |Γ_s|²) / |1 − Γ_s Γ_rec|²  +  T_unc |Γ_s|² / |1 − Γ_s Γ_rec|²
+  + T_cos Re[Γ_s / (1 − Γ_s Γ_rec)] / sqrt(1 − |Γ_rec|²)
+  + T_sin Im[Γ_s / (1 − Γ_s Γ_rec)] / sqrt(1 − |Γ_rec|²)
+  = Q_s T_NS + T_L                                                           (eq. cal)
+
+T_NS = (g_N D_N − g_L D_L) / (g (1 − |Γ_rec|²)),
+T_L  = ((g_L / g) D_L − T_0) / (1 − |Γ_rec|²)                                (eq. TNSTL)
+```
+
+- **Exact and linear.** Eq. cal is exact under the assumptions of § 4.1, and linear in Θ = (T_unc, T_cos, T_sin, T_NS, T_L).
+- **What the references need.** They need not be matched, nor sit on the same switch port as the calibrators. Only gain changes common to all paths cancel, so g_L/g and g_N/g must be stable.
+- **Drift.** T_NS and T_L contain the references' physical temperatures through D_L and D_N. Without temperature control, model them as linear in the logged temperatures, for example T_L(t) = T_L⁰ + κ_L [T_amb(t) − mean(T_amb)]. The system stays linear.
+- **T_NS is more than the diode ENR.** It also holds the pad attenuation, the mismatch between N and L, g_N/g_L, and, when L and N are on separate ports, the pad temperature minus the load temperature.
+- **Monsalve et al. (2017) C_1 and C_2** are the same two constants: T_NS = C_1 T_NS^a and T_L = T_L^a − C_2.
+
+**Design-matrix form** (Roque et al. 2021). Multiplying eq. cal by |1 − Γ_s Γ_rec|² / (1 − |Γ_s|²) gives T_s = X_L T_L + X_NS T_NS + X_unc T_unc + X_cos T_cos + X_sin T_sin, with
+
+```
+X_L   =  |1 − Γ_s Γ_rec|² / (1 − |Γ_s|²)
+X_NS  =  Q_s X_L
+X_unc = −|Γ_s|² / (1 − |Γ_s|²)
+X_cos = −Re[Γ_s (1 − Γ_s* Γ_rec*)] / ((1 − |Γ_s|²) sqrt(1 − |Γ_rec|²))
+X_sin = −Im[Γ_s (1 − Γ_s* Γ_rec*)] / ((1 − |Γ_s|²) sqrt(1 − |Γ_rec|²))       (eq. X)
+```
+
+A calibrator with known T_s contributes a row. The antenna temperature follows from the same expression, T_ant = X_ant Θ̂.
 
 ---
 
@@ -209,13 +280,14 @@ radiometer_noise(power, enbw_hz, tau_s, n_int, rng) -> noise
 # Stage 3a: the reference drift model.
 fit_references(obs, prior) -> Posterior
 # Fits P_AMB and P_NON as functions of (ν, t), with temperature covariates
-# and changepoints, so the switched ratio Q_s (M003 eq. Q) and its
+# and changepoints, so the switched ratio Q_s (eq. Q, § 4.5) and its
 # uncertainty are available at every non-reference sample.
 
 # Stage 3b: noise waves and reference constants.
 fit_noise_waves(obs, reflections, post_3a, prior) -> Posterior
 # Fits Θ = (T_unc, T_cos, T_sin, T_NS, T_L) plus drift coefficients
-# from the calibrator states (M003 eq. cal / X), with an explicit T_NS prior.
+# from the calibrator states (eqs. cal and X, § 4.5), with an explicit
+# T_NS prior.
 
 calibrate(obs, reflections, post_3a, post_3b) -> CalibratedSpectrum
 predict(post_3a, post_3b, state, reflection, covariates, times_unix)
@@ -235,7 +307,7 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
 **Stage 2 (S11 calibration) lives in data-analysis, not in eigsep_cal.**
 - `scripts/calibrate_field_s11.py` already runs the chain with cmt_vna `calkit`: raw → internal open/short/load (`vna` plane) → de-embed the `VNA*` path (`dut`) → embed the `RF*` path (`lna`, which is P).
 - Keeping one implementation avoids two versions of the same calibration drifting apart.
-- The chain gives point estimates. The adapter wraps the `lna` plane as `Reflection` and supplies `gamma_cov` from two sources: the scatter between repeat captures, and Monte Carlo through the same chain with perturbed inputs (standard models, switch-path S-parameters, resampling onto correlator channels).
+- The chain gives point estimates. The adapter wraps the `lna` plane as `Reflection` and supplies `gamma_cov`, for example from the scatter between repeat captures, or from Monte Carlo through the same chain with perturbed inputs (standard models, switch-path S-parameters, resampling onto correlator channels).
 - eigsep_cal's `embed` repeats the Γ cascade, because the forward model also needs T_s. The generator package tests it against `calkit.embed_sparams`, so the two cannot drift apart.
 
 ---
@@ -249,8 +321,8 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
 - **Prior against posterior.** Report the § 5.5 diagnostics for every block.
 - **Held-out prediction.** Score `predict` against data kept out of the fit (for example one SP1 termination, or next-night AMB/NON) as χ² against the predictive covariance.
 - **Forward-model tests in CI.**
-  - Port M003 notebook 003 section A into a unit test: eq. `Ps` against a direct wave-equation solution, to 1e-11 K.
-  - Test eq. `map` with the factor of 2.
+  - A unit test checks eq. Ps, with eq. map, against a direct solution of the four wave equations for random networks, to 1e-11 K.
+  - The map without the factor 2 in T_unc must fail that test.
 
 ---
 
@@ -278,3 +350,6 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
 
   Sections changed: § 4.2, 11.
 - **v0, 2026-09-14:** split out of that spec, with the same section numbers. The sections on eigsim, the D5 adapters and the generator's truth model (§ 7–9), and D5-specific notes elsewhere, stay in the D5 spec. No interface change.
+- **v0, 2026-09-14:** equations written out (§ 4.1–4.3 and a new § 4.5), so the spec no longer depends on memo M003 being at hand. No interface change.
+
+  Sections changed: § 1, 3, 4, 6, 10.
