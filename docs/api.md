@@ -147,7 +147,7 @@ T_cos − i T_sin = 2 sqrt(1 − |Γ_rec|²) (c + Γ_rec T_R)                   
 ### 4.4 Noise
 - **Radiometer noise.** Per sample, σ² = P² / (B_eff · τ · n_int).
 - **Bandwidth.** `enbw_hz` defaults to Δν = 244 140.625 Hz, until the SNAP polyphase filterbank's equivalent noise bandwidth is measured (§ 11).
-- **Channel correlation.** Channels are independent in v0.
+- **Channel correlation.** Channels are independent in v0. The exception is `Reflection.gamma_sys_modes` (§ 5.3), a low-rank systematic that is correlated across channels.
 
 ### 4.5 Calibration equation (stage 3)
 Stage 3 removes the gain with two internal references, L = `RFAMB` (load) and N = `RFNON` (noise source on):
@@ -225,6 +225,11 @@ The output of stage 2 (S11 calibration, which lives outside eigsep_cal, § 6), c
 | `times_unix` | `(n_meas,)` | Measurement time: S11 `metadata_snapshot_unix`, not the filename |
 | `source` | str | A § 3 state name, or `"receiver"` |
 | `freqs_mhz` | `(n_freq,)` | |
+| `gamma_sys_modes` | `(n_meas, n_modes, n_freq, 2)`, optional | Systematic modes, correlated across channels (below). Absent means none. |
+
+**Covariance.** `gamma_cov` is the part of the uncertainty that is independent between channels. `gamma_sys_modes` adds a low-rank part that is not: measurement i is off by Σ_k a_ik m_ik(ν), as (Re, Im), with a_ik independent standard normals, independent between measurements and of `gamma_cov`. The full covariance of measurement i over channels is therefore diag(`gamma_cov`) + Σ_k m_ik m_ikᵀ.
+
+A calibration systematic that is smooth in frequency, such as a per-sweep calibration error, is nearly fully correlated across channels. Stored as per-channel variance, it would be averaged down by a smooth fit as if it were independent noise.
 
 ### 5.4 `Observation`
 The data vector for one antenna, from an adapter or the generator.
@@ -354,3 +359,6 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
 
   Sections changed: § 1, 3, 4, 6, 10.
 - **v0, 2026-09-14:** memo M003 now ships with the package as Markdown (`docs/memos/`), and the background links to it. No interface change.
+- **v0, 2026-09-14:** optional `Reflection.gamma_sys_modes` (§ 4.4, § 5.3). It is additive: files without it load unchanged, and `SPEC_VERSION` is unchanged. It carries a frequency-correlated systematic that `gamma_cov` cannot (D5 notebook 015; CHB decision).
+
+  Sections changed: § 4.4, 5.3.

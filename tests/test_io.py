@@ -25,7 +25,13 @@ def assert_same(a, b):
 
 
 @pytest.mark.parametrize(
-    "make", [observation, reflection, lambda: observation(chan=None)]
+    "make",
+    [
+        observation,
+        reflection,
+        lambda: observation(chan=None),
+        lambda: reflection(gamma_sys_modes=np.full((2, 3, 3, 2), 1e-4)),
+    ],
 )
 def test_roundtrip(tmp_path, make):
     obj = make()
