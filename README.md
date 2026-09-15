@@ -16,7 +16,7 @@ The package is being rebuilt. It will hold:
   synthetic data.
 
 Today it contains the v0 forward model and data objects of
-`docs/interface.md`:
+`docs/api.md`:
 
 - `SParams`, `embed`: two-port cascade and available gain (§ 4.3);
 - `ReceiverModel`, `noise_wave_map`: receiver noise parameters (§ 4.2);
