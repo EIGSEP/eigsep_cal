@@ -102,7 +102,7 @@ F_s = sqrt(1 − |Γ_rec|²) / (1 − Γ_s Γ_rec),    M_s = (1 − |Γ_s|²) |F
 |---|---|---|
 | `t_unc_k`, `t_cos_k`, `t_sin_k`, `t0_k` | `(n_freq,)` or `(n_time, n_freq)` | Rogers & Bowman parameterisation |
 | `t_r_k`, `t_l_k`, `c_k` | same; `c_k` complex | Intrinsic parameterisation (eq. map, below). Use either this set or the row above, selected by `parameterisation`. |
-| `gamma_rec` | `(n_freq,)` or `(n_time, n_freq)` complex | Measured at sparse epochs; mapping onto samples is open (§ 11) |
+| `gamma_rec` | `(n_freq,)` or `(n_time, n_freq)` complex | Measured at sparse epochs; mapping onto samples is open (§ 11). Finite, with \|Γ_rec\| < 1 |
 | `gain` | `(n_time, n_freq)` | Must be > 0 |
 | `path_gain_ratio` | `dict[state, (n_freq,)]` | Defaults to 1 |
 
@@ -155,7 +155,7 @@ T_cos − i T_sin = 2 sqrt(1 − |Γ_rec|²) (c + Γ_rec T_R)                   
   - Fits never need them, because the measured Γ_ant already includes both.
 
 ### 4.4 Noise
-- **Radiometer noise.** Per sample, σ² = P² / (B_eff · τ · n_int).
+- **Radiometer noise.** Per sample, σ² = P² / (B_eff · τ · n_int). `radiometer_noise` requires P finite and ≥ 0: power is a spectral density, so a negative P means non-physical model parameters, and σ would inherit its sign.
 - **Bandwidth.** `enbw_hz` defaults to Δν = 244 140.625 Hz, until the SNAP polyphase filterbank's equivalent noise bandwidth is measured (§ 11).
 - **Channel correlation.** Channels are independent in v0.
 
@@ -209,7 +209,7 @@ Built by the generator from sky-simulation output; consumed by the forward model
 |---|---|---|
 | `t_ant_k` | `(n_time, n_freq)` | Available noise temperature at the terminals of the free-space antenna model: everything the simulator models, meaning sky, horizon and ground. **No receiver term, no balun loss, no coax.** The generator adds the balun and everything after it with `embed` (§ 4.3). This is not the plane of a calibrated spectrum (§ 3). |
 | `freqs_mhz` | `(n_freq,)` | |
-| `times_unix` | `(n_time,)` | |
+| `times_unix` | `(n_time,)` | Finite, strictly increasing |
 | `antenna` | str | `"box-air"` or `"box-gnd"` |
 | `elevation_deg`, `azimuth_deg` | `(n_time,)` | Drive angles per sample; provenance only |
 | `meta` | dict | Simulator version and config; beam, horizon, sky and ground models, with any drawn parameters |
@@ -236,8 +236,8 @@ The output of stage 2 (S11 calibration, which lives outside eigsep_cal, § 6), c
 | Field | Shape | Notes |
 |---|---|---|
 | `gamma` | `(n_meas, n_freq)` complex | At P. For `RFANT` it includes the balun and coax (§ 3). |
-| `gamma_cov` | `(n_meas, n_freq, 2, 2)` | Covariance of (Re, Im) |
-| `times_unix` | `(n_meas,)` | Measurement time: S11 `metadata_snapshot_unix`, not the filename |
+| `gamma_cov` | `(n_meas, n_freq, 2, 2)` | Covariance of (Re, Im). Finite, symmetric and positive semi-definite, each to a relative 1e-8 |
+| `times_unix` | `(n_meas,)` | Measurement time: S11 `metadata_snapshot_unix`, not the filename. Finite, strictly increasing; S11 filenames are write times, so sort by this, not by file order |
 | `source` | str | A § 3 state name, or `"receiver"` |
 | `freqs_mhz` | `(n_freq,)` | |
 
@@ -248,7 +248,7 @@ The data vector for one antenna, from an adapter or the generator.
 |---|---|---|
 | `power` | `(n_time, n_freq)` | One integration or an average of several |
 | `state` | `(n_time,)` str | § 3 names only |
-| `times_unix` | `(n_time,)` | Sample centre |
+| `times_unix` | `(n_time,)` | Sample centre. Finite, strictly increasing |
 | `tau_s` | `(n_time,)` | Time per integration |
 | `n_int` | `(n_time,)` int | Integrations averaged into the sample |
 | `flags` | `(n_time, n_freq)` bool | `True` = bad |
@@ -309,7 +309,7 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
     -> (mean, cov)   # predictive power for held-out checks
 ```
 
-- `sources` is a `dict[state, Source]`. A `Source` holds `gamma_s` and `t_s_k`, each shaped `(1 or n_time, n_freq)`.
+- `sources` is a `dict[state, Source]`. A `Source` holds `gamma_s` and `t_s_k`, each shaped `(1 or n_time, n_freq)`. `gamma_s` is finite with |Γ_s| ≤ 1, because every source is passive; an ideal open or short (|Γ_s| = 1) is allowed, since M_s = 0 and T_s drops out of eq. Ps.
 - `CalibratedSpectrum` holds:
   - `t_ant_k` mean, `(n_time, n_freq)`;
   - either `cov` over frequency per time sample, or `draws`;
@@ -377,3 +377,10 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
   - § 3 no longer says the in-situ calibration de-embeds switch paths; it works at P, with each path embedded in its source.
 
   Sections changed: § 3, 4.3, 5.2, 6 (wording only; § 6 keeps its meaning).
+- **v0, 2026-09-15:** input checks that the forward model now enforces, written into the spec (PR #2 review). Invalid inputs are rejected at construction; valid ones compute exactly as before, and a `gamma_cov` symmetric only to roundoff is now accepted.
+  - `times_unix` is finite and strictly increasing in `SkyTemperature`, `Reflection` and `Observation` (§ 5.1, 5.3, 5.4).
+  - `Reflection.gamma_cov` is finite, symmetric and positive semi-definite, each to a relative 1e-8 (§ 5.3).
+  - `ReceiverModel.gamma_rec` is finite with |Γ_rec| < 1 (§ 4.2). `Source.gamma_s` is finite with |Γ_s| ≤ 1 (§ 6).
+  - `radiometer_noise` takes finite power ≥ 0 (§ 4.4).
+
+  Sections changed: § 4.2, 4.4, 5.1, 5.3, 5.4, 6.
