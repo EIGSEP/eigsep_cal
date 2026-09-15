@@ -55,7 +55,7 @@ def embed(gamma_term, t_term_k, sparams, t_path_k):
 
     Through a lossy path T_s lies strictly between T_t and T_p. The
     inverse, T_t = (T_s - (1 - G) T_p) / G, is de-embedding, which
-    eigsep_cal never does.
+    eigsep_cal does not implement.
 
     Parameters
     ----------

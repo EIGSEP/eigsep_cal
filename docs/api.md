@@ -133,12 +133,13 @@ T_cos − i T_sin = 2 sqrt(1 − |Γ_rec|²) (c + Γ_rec T_R)                   
   G   = |S12·S21| (1 − |Γ_t|²) / ( |1 − S22 Γ_t|² (1 − |Γ_s|²) )             (eq. availgain)
   ```
 
-  - **Direction.** `embed` carries the termination outward, from the far end of the path to the reference side, and the port labels follow from that: port 2 carries the termination, and port 1 is the reference side. eigsep_cal never runs it the other way (§ 5.2).
+  - **Direction.** `embed` carries the termination outward, from the far end of the path to the reference side, and the port labels follow from that: port 2 carries the termination, and port 1 is the reference side. `embed` never runs it the other way; see § 5.2 for where de-embedding happens.
   - **G** is the available gain of the path from port 2 to port 1. |S12·S21| stands for |S12|², the transmission in that direction; the two are equal for a reciprocal path. For a passive path 0 ≤ G ≤ 1.
   - **Sources.**
     - T_s = G T_t + (1 − G) T_p is Monsalve et al. (2017) eq. 8. It holds in any port labelling.
     - Eqs. embed and availgain are Monsalve et al. (2024) eqs. 16 and 17, in our labels ("port 1 (2) being the balun output (input)"). Their eq. 17 is the balun efficiency, the generator's first step below. Eq. embed is also cmt_vna `calkit.embed_sparams`.
     - Monsalve et al. (2017) eq. 9 prints G with S21 and S11, because their port 1 carries the termination. It is the mirror image of eq. availgain: the same gain, with the path read from the other end.
+    - Cross-check: edges-analysis `compute_cable_loss_from_scattering_params` (`edges/cal/loss.py`) computes the same G in the same labels, de-embedding the termination to port 2 and putting S22 in the denominator.
   - **Direction matters more than labels.**
     - *Labels read the wrong way round.* S11 where S22 belongs changes G by a fraction ≈ 2 Re[(S11 − S22) Γ_t], second order in small reflections. In eq. embed the same slip offsets Γ_s by ≈ S22 − S11, first order. Both vanish for a symmetric path. A label swap does not reverse the direction: the result still embeds, through the path turned round.
     - *Direction reversed.* De-embedding inverts eq. availgain, T_t = (T_s − (1 − G) T_p) / G. Used where embedding belongs, it misplaces T_s by (1 − G²)(T_t − T_p) / G ≈ 2 (1 − G)(T_t − T_p): first order in the loss, even for a matched path.
@@ -224,10 +225,10 @@ Built by the generator from sky-simulation output; consumed by the forward model
 - Port 2 (`s22`) is the end the termination sits on: the antenna side, a load, the SP1 cable. Port 1 (`s11`) is the reference side it is observed from: P for `RF*` paths, the VNA for `VNA*` paths.
 - These are the labels of cmt_vna `calkit.embed_sparams`, Γ' = S11 + S12·S21 Γ / (1 − S22 Γ), which data-analysis's S11 chain (`scripts/calibrate_field_s11.py`) uses, and of Monsalve et al. (2024). Two-port data measured the other way round need S11 and S22 swapped before they become an `SParams`.
 
-**eigsep_cal only embeds; it never de-embeds.**
-- `embed` is its only two-port operation, and nothing in eigsep_cal inverts it, for Γ or for T.
+**Where de-embedding happens.**
+- `embed` is eigsep_cal's only two-port operation, and nothing in eigsep_cal inverts it, for Γ or for T.
 - Reflections are de-embedded upstream, in stage 2: `scripts/calibrate_field_s11.py` removes the `VNA*` switch path with `calkit.de_embed_sparams` (§ 6).
-- No temperature is de-embedded anywhere in the chain. The calibration does not remove the balun, coax or RFANT switch path (§ 3, § 6). To compare with simulations, stage 5 embeds a simulated `t_ant_k` through them instead (§ 4.3).
+- Temperatures: removing a measured path from a calibrated spectrum is a temperature de-embedding, T_t = (T_s − (1 − G) T_p) / G, as in edges-analysis `apply_loss_correction`. § 6 allows it for the RFANT switch path, whose S-parameters are measured; eigsep_cal does not implement it. The balun and coax are not measured, so nothing removes them, and stage 5 embeds a simulated `t_ant_k` through them instead (§ 4.3).
 
 ### 5.3 `Reflection`
 The output of stage 2 (S11 calibration, which lives outside eigsep_cal, § 6), consumed by stage 3.
@@ -315,7 +316,7 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
   - `flags`, `antenna`, `freqs_mhz`, `times_unix`, `provenance`.
 
   It is the input to stage 5.
-- **`CalibratedSpectrum.t_ant_k` is not a simulated free-space `t_ant_k`.** It is the RFANT source temperature at P, covering the antenna, balun, coax and RFANT switch path (§ 3). Nothing in the chain removes any of them, because no temperature is de-embedded (§ 5.2). To compare with simulations, stage 5 forward-models all three with `embed` and marginalises over the priors of those not measured (§ 4.3).
+- **`CalibratedSpectrum.t_ant_k` is not a simulated free-space `t_ant_k`.** It is the RFANT source temperature at P, covering the antenna, balun, coax and RFANT switch path (§ 3). Measured S-parameters can remove the switch path, which de-embeds a temperature (§ 5.2); nothing in the calibration removes the balun and coax. To compare with simulations, stage 5 forward-models them with `embed` and marginalises over their priors (§ 4.3).
 - 3a comes before 3b because the model is bilinear in gain and noise waves. The v0 validation (§ 10) must compare the two-stage result with a joint fit on synthetic data, to measure what the split costs.
 
 **Stage 2 (S11 calibration) lives in data-analysis, not in eigsep_cal.**
@@ -372,6 +373,7 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
   - Memo M003's eq. availgain had S11 where § 4.3 and `embed` have S22. Both were right, in opposite port labels; the memo now uses ours.
   - § 4.3 states the direction, names eq. embed, writes G with |S12·S21|, and cites Monsalve et al. (2024) eqs. 16–17, which use our labels. Monsalve et al. (2017) eq. 8 stays the source of T_s = G T_t + (1 − G) T_p.
   - § 5.2 leads with the direction, and the port labels follow from it.
-  - New invariant (§ 5.2): eigsep_cal only embeds, and no temperature is de-embedded anywhere in the chain. § 3 and § 6 no longer say that the calibration de-embeds switch paths or that measured S-parameters can remove the RFANT path.
+  - § 5.2 says where de-embedding happens: reflections upstream in stage 2, and `embed` is eigsep_cal's only two-port operation. § 6's option to remove the measured RFANT switch path is unchanged, and is now named as a temperature de-embedding.
+  - § 3 no longer says the in-situ calibration de-embeds switch paths; it works at P, with each path embedded in its source.
 
-  Sections changed: § 3, 4.3, 5.2, 6.
+  Sections changed: § 3, 4.3, 5.2, 6 (wording only; § 6 keeps its meaning).
