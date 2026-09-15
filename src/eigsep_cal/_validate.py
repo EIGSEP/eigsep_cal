@@ -12,8 +12,15 @@ def _finish(name, arr, ndim):
     return arr
 
 
+def _not_none(name, value):
+    # np.asarray(None) is an object array that casts to NaN silently.
+    if value is None:
+        raise TypeError(f"{name} must be an array, got None")
+
+
 def float_array(name, value, ndim=None):
-    """A read-only float64 copy of *value*; complex input is an error."""
+    """A read-only float64 copy of *value*; None or complex is an error."""
+    _not_none(name, value)
     arr = np.asarray(value)
     if np.iscomplexobj(arr):
         raise TypeError(f"{name} must be real, got complex")
@@ -21,7 +28,8 @@ def float_array(name, value, ndim=None):
 
 
 def complex_array(name, value, ndim=None):
-    """A read-only complex128 copy of *value*."""
+    """A read-only complex128 copy of *value*; None is an error."""
+    _not_none(name, value)
     return _finish(name, np.array(value, dtype=np.complex128), ndim)
 
 

@@ -21,6 +21,13 @@ class TestArrays:
     def test_complex_array_dtype(self):
         assert v.complex_array("g", [0.1, 0.2]).dtype == np.complex128
 
+    @pytest.mark.parametrize("convert", [v.float_array, v.complex_array])
+    def test_none_rejected(self, convert):
+        """np.asarray(None) casts to NaN, so embed(t_term_k=None) gave an
+        all-NaN source temperature without a diagnostic."""
+        with pytest.raises(TypeError, match="t_term_k"):
+            convert("t_term_k", None)
+
     def test_ndim_checked(self):
         with pytest.raises(ValueError, match="ndim"):
             v.float_array("x", [[1.0]], ndim=1)
