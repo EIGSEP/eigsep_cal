@@ -11,9 +11,12 @@ from . import _validate as v
 class SParams:
     """S-parameters of a switch path or cable.
 
-    Port convention (spec § 5.2, cmt_vna ``calkit``): port 1 (``s11``)
-    faces the reference side and port 2 (``s22``) faces the
-    termination. Only the product ``s12s21`` is stored.
+    The direction fixes the port labels (spec § 5.2). A signal crosses
+    the path from port 2 (``s22``), where the termination sits, to
+    port 1 (``s11``), the reference side it is observed from: P for
+    ``RF*`` paths, the VNA for ``VNA*`` paths. These are the labels of
+    cmt_vna ``calkit`` and of Monsalve et al. (2024). Only the product
+    ``s12s21`` is stored.
     """
 
     s11: np.ndarray
@@ -34,11 +37,25 @@ class SParams:
 def embed(gamma_term, t_term_k, sparams, t_path_k):
     """The source seen at the reference side of a two-port.
 
-    Gamma_s = S11 + S12S21 Gamma_t / (1 - S22 Gamma_t), and
-    T_s = G T_t + (1 - G) T_p with the available gain
-    G = |S12S21| (1 - |Gamma_t|^2) / (|1 - S22 Gamma_t|^2 (1 - |Gamma_s|^2))
-    (M003 eq. availgain, with the termination on port 2). |S21|^2 is
-    taken as |S12S21|, which assumes a reciprocal, passive path.
+    Embeds, and only embeds (spec § 5.2): it carries a termination on
+    port 2 out through the path to the reference side on port 1::
+
+        Gamma_s = S11 + S12S21 Gamma_t / (1 - S22 Gamma_t)   (eq. embed)
+        T_s = G T_t + (1 - G) T_p,
+        G = |S12S21| (1 - |Gamma_t|^2)
+            / (|1 - S22 Gamma_t|^2 (1 - |Gamma_s|^2))   (eq. availgain)
+
+    G is the available gain from port 2 to port 1 (M003 eqs. embed and
+    availgain; spec § 4.3). These are Monsalve et al. (2024) eqs. 16
+    and 17, the balun efficiency, in the same port labels, and
+    T_s = G T_t + (1 - G) T_p is Monsalve et al. (2017) eq. 8.
+    Monsalve et al. (2017) eq. 9 has S11 in the denominator because
+    their port 1 carries the termination. |S12|^2 is taken as |S12S21|,
+    which assumes a reciprocal path; 0 <= G <= 1 needs it passive.
+
+    Through a lossy path T_s lies strictly between T_t and T_p. The
+    inverse, T_t = (T_s - (1 - G) T_p) / G, is de-embedding, which
+    eigsep_cal never does.
 
     Parameters
     ----------
