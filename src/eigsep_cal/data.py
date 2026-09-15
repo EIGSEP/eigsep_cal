@@ -79,13 +79,20 @@ class SkyTemperature:
 
 @dataclass(frozen=True, kw_only=True)
 class Reflection:
-    """Calibrated reflection coefficients at P, from stage 2 (spec § 5.3)."""
+    """Calibrated reflection coefficients at P, from stage 2 (spec § 5.3).
+
+    ``gamma_cov`` is the channel-independent part of the uncertainty.
+    ``gamma_sys_modes``, when given, adds a low-rank part correlated across
+    channels: measurement i is off by ``sum_k a_ik * m_ik`` with ``a_ik``
+    independent standard normals, independent between measurements.
+    """
 
     gamma: np.ndarray
     gamma_cov: np.ndarray
     times_unix: np.ndarray
     source: str
     freqs_mhz: np.ndarray
+    gamma_sys_modes: np.ndarray | None = None
 
     def __post_init__(self):
         freqs = v.freqs_mhz(self.freqs_mhz)
@@ -110,12 +117,25 @@ class Reflection:
                 f"source must be one of {REFLECTION_SOURCES}, "
                 f"got {self.source!r}"
             )
+        modes = None
+        if self.gamma_sys_modes is not None:
+            modes = v.float_array(
+                "gamma_sys_modes", self.gamma_sys_modes, ndim=4
+            )
+            v.check_shape(
+                "gamma_sys_modes", modes, (n_meas, None, freqs.size, 2)
+            )
+            if modes.shape[1] < 1:
+                raise ValueError("gamma_sys_modes needs at least one mode")
+            if not np.all(np.isfinite(modes)):
+                raise ValueError("gamma_sys_modes must be finite")
         _set(
             self,
             freqs_mhz=freqs,
             gamma=gamma,
             gamma_cov=cov,
             times_unix=_times(self.times_unix, n_meas),
+            gamma_sys_modes=modes,
         )
 
     def save(self, path):

@@ -170,6 +170,37 @@ class TestReflection:
         with pytest.raises(ValueError, match="gamma"):
             reflection(gamma=np.zeros((2, FREQS.size + 1)))
 
+    def test_sys_modes_default_none(self):
+        assert reflection().gamma_sys_modes is None
+
+    def test_sys_modes_valid_and_readonly(self):
+        modes = np.full((2, 3, FREQS.size, 2), 1e-4)
+        refl = reflection(gamma_sys_modes=modes)
+        assert refl.gamma_sys_modes.dtype == np.float64
+        assert refl.gamma_sys_modes.shape == (2, 3, FREQS.size, 2)
+        with pytest.raises(ValueError):
+            refl.gamma_sys_modes[0, 0, 0, 0] = 0.0
+
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            (1, 3, FREQS.size, 2),
+            (2, 3, FREQS.size + 1, 2),
+            (2, 3, FREQS.size, 3),
+            (2, 0, FREQS.size, 2),
+            (2, FREQS.size, 2),
+        ],
+    )
+    def test_sys_modes_shape_checked(self, shape):
+        with pytest.raises(ValueError, match="gamma_sys_modes"):
+            reflection(gamma_sys_modes=np.zeros(shape))
+
+    def test_sys_modes_must_be_finite(self):
+        modes = np.full((2, 3, FREQS.size, 2), 1e-4)
+        modes[0, 0, 0, 0] = np.nan
+        with pytest.raises(ValueError, match="gamma_sys_modes"):
+            reflection(gamma_sys_modes=modes)
+
 
 class TestObservation:
     def test_valid(self):
