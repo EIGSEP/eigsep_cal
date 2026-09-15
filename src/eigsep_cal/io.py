@@ -22,7 +22,22 @@ def _npz_path(path):
 
 
 def save(obj, path):
-    """Write a dataclass object to *path* as npz with ``spec_version``."""
+    """Write a dataclass object to *path* as npz with ``spec_version``.
+
+    Arrays are stored as they are, and each dict named in the class's
+    ``_ARRAY_DICTS`` (``Observation.covariates``) as one array per key.
+    Every other field, including dicts such as ``provenance`` or
+    ``meta``, is stored as JSON, so it does not round-trip exactly:
+    tuples reload as lists and non-string dict keys as strings. Values
+    JSON cannot encode, such as numpy arrays, raise ``TypeError``.
+
+    Parameters
+    ----------
+    obj : dataclass
+        The object to write, for example an ``Observation``.
+    path : str or path-like
+        Destination; ``.npz`` is appended if it is missing.
+    """
     array_dicts = getattr(type(obj), "_ARRAY_DICTS", ())
     payload = {
         "spec_version": np.array(SPEC_VERSION),
@@ -46,7 +61,24 @@ def save(obj, path):
 
 
 def load(path, cls):
-    """Read an object of class *cls* written by :func:`save`."""
+    """Read an object of class *cls* written by :func:`save`.
+
+    JSON-stored fields come back as JSON types (see :func:`save`): a
+    tuple in ``provenance`` reloads as a list, and a non-string dict
+    key as a string.
+
+    Parameters
+    ----------
+    path : str or path-like
+        A file written by :func:`save`; ``.npz`` is appended if it is
+        missing.
+    cls : type
+        The class to build; it must match the file's ``kind``.
+
+    Returns
+    -------
+    obj : cls
+    """
     path = _npz_path(path)
     with np.load(path, allow_pickle=False) as d:
         version = str(d["spec_version"])

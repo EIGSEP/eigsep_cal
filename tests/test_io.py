@@ -68,6 +68,15 @@ def test_wrong_spec_version_raises(tmp_path):
         Reflection.load(tmp_path / "r99.npz")
 
 
+def test_json_fields_reload_as_json_types(tmp_path):
+    """Documented in io.save: tuples reload as lists, non-str dict keys
+    as str. Pinned so the behaviour cannot change silently."""
+    obj = observation(provenance={"files": ("a.h5", "b.h5"), 7: {"n": 16}})
+    obj.save(tmp_path / "o.npz")
+    got = dict(Observation.load(tmp_path / "o.npz").provenance)
+    assert got == {"files": ["a.h5", "b.h5"], "7": {"n": 16}}
+
+
 def test_provenance_must_be_json(tmp_path):
     obj = observation(provenance={"bad": object()})
     with pytest.raises(TypeError):

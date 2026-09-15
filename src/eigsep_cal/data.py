@@ -222,7 +222,11 @@ class Observation:
         return self.power.shape[1]
 
     def save(self, path):
-        """Write to an npz file (spec § 5.6)."""
+        """Write to an npz file (spec § 5.6).
+
+        ``provenance`` is stored as JSON: tuples reload as lists and
+        non-string keys as strings (see :func:`eigsep_cal.io.save`).
+        """
         from . import io
 
         io.save(self, path)
