@@ -1,6 +1,6 @@
 # EIGSEP D5 Memo M003: Receiver calibration — the equations to solve, their inputs, and what deployment 5 can support
 
-> Generated from `memos/M003_receiver_calibration/memo.tex` at manuscript commit `3161808` of the EIGSEP Deployment 5 analysis by `scripts/memo2md.py`. Do not edit by hand: change the LaTeX source and regenerate.
+> Generated from `memos/M003_receiver_calibration/memo.tex` at manuscript commit `dbe0160` of the EIGSEP Deployment 5 analysis by `scripts/memo2md.py`. Do not edit by hand: change the LaTeX source and regenerate.
 
 ## Abstract
 
@@ -196,7 +196,7 @@ T_{\mathrm{NS}}=C_1T^a_{\mathrm{NS}},\qquad T_{\mathrm{L}}=T^a_L-C_2 .\tag{C1C2}
 
 $C_1$ and $C_2$ are not ad hoc corrections. By eq. (TNSTL) they are the two reference constants, and they absorb the references’ mismatch, path gains and the receiver offset. Roque et al. (2021) absorb them the same way, and MIST’s $(g_R,T_R)$ form is eq. (cal) solved for $T_A$ (Monsalve et al. 2024).
 
-**Drifting reference temperatures.** $T_{\mathrm{NS}}$ and $T_{\mathrm{L}}$ contain the references’ physical temperatures through $D_L$ and $D_N$. In Deployment 5 the references are on different ports: $L$=RFAMB at $T_{\mathrm{amb}}$ (`tempctrl_load.T_now`) and $N$=RFNON, whose pad temperature is not measured directly. The three `rfswitch_therm` thermistors sit on the switch PCB (CHB; Q-CHB-10, resolved). Without temperature control, both constants should be modelled as linear in the logged temperatures, e.g. $T_{\mathrm{L}}(t)=T_{\mathrm{L}}^0+\kappa_L[T_{\mathrm{amb}}(t)-\bar T_{\mathrm{amb}}]$. The system stays linear.
+**Drifting reference temperatures.** $T_{\mathrm{NS}}$ and $T_{\mathrm{L}}$ contain the references’ physical temperatures through $D_L$ and $D_N$. In Deployment 5 the references are on different ports: $L$=RFAMB at $T_{\mathrm{amb}}$ (`tempctrl_load.T_now`) and $N$=RFNON, whose 30 dB pad sits on the switch board with the noise source. The three `rfswitch_therm` thermistors are on that board (CHB; Q-CHB-10, Q-CHB-51), so they proxy the pad temperature. Which channel reads the pad is not certain, but the three read close to each other. Without temperature control, both constants should be modelled as linear in the logged temperatures, e.g. $T_{\mathrm{L}}(t)=T_{\mathrm{L}}^0+\kappa_L[T_{\mathrm{amb}}(t)-\bar T_{\mathrm{amb}}]$. The system stays linear.
 
 Only gain changes common to all paths cancel in $Q_s$. The path-gain ratios $g_L/g$ and $g_N/g$ must therefore be stable.
 
@@ -204,7 +204,7 @@ A prior on $T_{\mathrm{NS}}$ is more than the diode’s ENR. By eq. (TNSTL), wi
 
 - the ENR and pad attenuation: **ENR 35 dB behind a 30 dB pad, a net 5 dB** (CHB, 2026-09-14; Q-CGT-05, resolved), so the on$-$off excess at the switch is $290\,\mathrm{K}\cdot10^{0.5}\simeq917$ K, independent of the pad temperature. This is a nameplate value, not a measurement, so the prior needs a width (**\[TODO: set it from a lab ENR measurement, IMP-05\]**);
 
-- the pad temperature minus the ambient-load temperature;
+- the pad temperature minus the ambient-load temperature, logged through the switch-board thermistors as a proxy (Q-CHB-51);
 
 - the RFNON vs RFAMB mismatch;
 
@@ -424,7 +424,7 @@ Notebook `003` (section D), with `001`, gives the following:
 | Temperature contrast               | RFAMB heated via `tempctrl_load`                                     | load read 37–47 $^\circ$C on Jul 12–13 (controller drive zero; Q-CHB-26), but no load-like spectra while warm (nb. 006 §4; Q-CHB-18)    | post-deployment lab hot/cold loads; $T_{\mathrm{NS}}$ prior (ENR, pad, $T_{\mathrm{pad}}-T_{\mathrm{amb}}$, NON/AMB mismatch, path-gain ratio; eq. TNSTL); sky-model scale (degenerate with beam and ground) |
 | $\Gamma_s$, $\Gamma_{\mathrm{rx}}$ | VNA after internal OSL                                               | 14 hourly pairs in night 16/17, sparse otherwise (Q-CHB-32); 7 with singular OSL solve (`cmt_vna` \#54)                                 | stage 2 (notebook `013`, with borrowed OSLs)                                                                                                                                                                 |
 | Path S-parameters to $\mathcal P$  | lab file `switch_sparams.npz` (7 switch paths)                       | final (Q-CGT-02); measured after the fall with the instrument disassembled, each path at its port’s connector face (Q-CGT-03, Q-CGT-11) | fitted path delays and losses if unusable                                                                                                                                                                    |
-| Physical temperatures              | `tempctrl_load.T_now`; `rfswitch_therm` (switch PCB); SP1 cable; LNA | load OK; switch-PCB readings need cleaning; SP1 cable temperature not logged and type unknown (Q-CHB-33); `tempctrl_lna` dead           | switch-PCB temperature as a proxy for the in-box paths                                                                                                                                                       |
+| Physical temperatures              | `tempctrl_load.T_now`; `rfswitch_therm` (switch PCB); SP1 cable; LNA | load OK; switch-PCB readings need cleaning; SP1 cable temperature not logged and type unknown (Q-CHB-33); `tempctrl_lna` dead           | switch-PCB temperature as a proxy for the in-box paths and the noise-source pad                                                                                                                              |
 | Receiver stability                 | no LNA temperature control in Deployment 5                           | $\Gamma_{\mathrm{rx}}$ measured hourly only on night 16/17 (Q-CHB-32)                                                                   | fit per epoch; intrinsic parameterisation (Section 4)                                                                                                                                                        |
 
 ### 7.1 What Deployment 5 can support
