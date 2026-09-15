@@ -228,7 +228,7 @@ Built by the generator from sky-simulation output; consumed by the forward model
 **Where de-embedding happens.**
 - `embed` is eigsep_cal's only two-port operation, and nothing in eigsep_cal inverts it, for Γ or for T.
 - Reflections are de-embedded upstream, in stage 2: `scripts/calibrate_field_s11.py` removes the `VNA*` switch path with `calkit.de_embed_sparams` (§ 6).
-- Temperatures: removing a measured path from a calibrated spectrum is a temperature de-embedding, T_t = (T_s − (1 − G) T_p) / G, as in edges-analysis `apply_loss_correction`. § 6 allows it for the RFANT switch path, whose S-parameters are measured; eigsep_cal does not implement it. The balun and coax are not measured, so nothing removes them, and stage 5 embeds a simulated `t_ant_k` through them instead (§ 4.3).
+- **Temperatures are never de-embedded** (decision 2026-09-15, workspace Q-CHB-50). Removing a path from a calibrated spectrum, T_t = (T_s − (1 − G) T_p) / G as in edges-analysis `apply_loss_correction`, is not done for any path. That includes the measured RFANT switch path, and it includes diagnostics. Stage 5 instead embeds a simulated `t_ant_k` through the balun, the coax and the RFANT switch path (§ 4.3, § 6).
 
 ### 5.3 `Reflection`
 The output of stage 2 (S11 calibration, which lives outside eigsep_cal, § 6), consumed by stage 3.
@@ -316,7 +316,7 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
   - `flags`, `antenna`, `freqs_mhz`, `times_unix`, `provenance`.
 
   It is the input to stage 5.
-- **`CalibratedSpectrum.t_ant_k` is not a simulated free-space `t_ant_k`.** It is the RFANT source temperature at P, covering the antenna, balun, coax and RFANT switch path (§ 3). Measured S-parameters can remove the switch path, which de-embeds a temperature (§ 5.2); nothing in the calibration removes the balun and coax. To compare with simulations, stage 5 forward-models them with `embed` and marginalises over their priors (§ 4.3).
+- **`CalibratedSpectrum.t_ant_k` is not a simulated free-space `t_ant_k`.** It is the RFANT source temperature at P, covering the antenna, balun, coax and RFANT switch path (§ 3). Nothing removes any of them, because temperatures are never de-embedded (§ 5.2). To compare with simulations, stage 5 forward-models all three with `embed`, the switch path from its measured S-parameters and the balun and coax from priors, and marginalises over their uncertainties (§ 4.3).
 - 3a comes before 3b because the model is bilinear in gain and noise waves. The v0 validation (§ 10) must compare the two-stage result with a joint fit on synthetic data, to measure what the split costs.
 
 **Stage 2 (S11 calibration) lives in data-analysis, not in eigsep_cal.**
@@ -384,3 +384,6 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
   - `radiometer_noise` takes finite power ≥ 0 (§ 4.4).
 
   Sections changed: § 4.2, 4.4, 5.1, 5.3, 5.4, 6.
+- **v0, 2026-09-15:** temperatures are never de-embedded (workspace Q-CHB-50). § 6 no longer allows removing the measured RFANT switch path from a calibrated spectrum. Stage 5 forward-models the switch path, the coax and the balun together with `embed`. No interface change, since eigsep_cal never implemented the removal.
+
+  Sections changed: § 5.2, 6.

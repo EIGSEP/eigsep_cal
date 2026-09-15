@@ -1,6 +1,6 @@
 # EIGSEP D5 Memo M003: Receiver calibration — the equations to solve, their inputs, and what deployment 5 can support
 
-> Generated from `memos/M003_receiver_calibration/memo.tex` at manuscript commit `d8fae42` of the EIGSEP Deployment 5 analysis by `scripts/memo2md.py`. Do not edit by hand: change the LaTeX source and regenerate.
+> Generated from `memos/M003_receiver_calibration/memo.tex` at manuscript commit `3161808` of the EIGSEP Deployment 5 analysis by `scripts/memo2md.py`. Do not edit by hand: change the LaTeX source and regenerate.
 
 ## Abstract
 
@@ -441,7 +441,7 @@ Notebook `003` (section D), with `001`, gives the following:
 
     The LNAs and switches survived the fall (CHB; Q-CHB-09, resolved). A post-deployment lab calibration of the same receiver, with external hot and cold loads and cables, can therefore supply $T_{\mathrm{NS}}$ and the noise-wave parameters, as in Monsalve et al. (2017) and Monsalve et al. (2024). The result transfers to the field under case (iii) of Section 4, with the field AMB, NON and SP1 data as the check.
 
-    The coax from the antenna balun to the switch did not survive, so its S-parameters cannot be measured. It is on the antenna side of $\mathcal P$. The S11 chain de-embeds only the `VNA*` switch paths, and the in-situ calibration works at $\mathcal P$, so for both of them the antenna source is the antenna, balun and coax together. The coax enters $\Gamma_s$ for the antenna and the efficiency correction, not the receiver calibration. The beam models are free space and include neither the balun nor the coax (CHB), so the calibrated $T_{\mathrm{ant}}$ is not at the plane of a simulated antenna temperature. Calibration needs no coax model. Comparisons with simulations do, with priors on the coax loss and temperature.
+    The coax from the antenna balun to the switch did not survive, so its S-parameters cannot be measured. It is on the antenna side of $\mathcal P$. The S11 chain de-embeds only the `VNA*` switch paths, and the in-situ calibration works at $\mathcal P$, so for both of them the antenna source is the antenna, balun and coax together. The coax enters $\Gamma_s$ for the antenna and the stage-5 forward model, not the receiver calibration. Nothing is de-embedded from the spectra, not even the measured switch path: stage 5 embeds the balun, the coax and the switch path together (Q-CHB-50). The beam models are free space and include neither the balun nor the coax (CHB), so the calibrated $T_{\mathrm{ant}}$ is not at the plane of a simulated antenna temperature. Calibration needs no coax model. Comparisons with simulations do, with priors on the coax loss and temperature.
 
 ## 8. Decisions and implications
 
