@@ -8,7 +8,7 @@ Items marked **Open** need a decision before code depends on them. Once a consum
 
 **Background**
 - Calibration is staged and Bayesian. Each stage passes a posterior, not a point estimate; there is no single joint fit.
-- The physics follows EIGSEP memo M003 (receiver calibration), where it is derived and checked. Every equation used here is written out in § 4, under the memo's names (eq. Ps, eq. map, …), so this document stands on its own.
+- The physics is derived and checked in EIGSEP memo M003, receiver calibration ([`memos/M003_receiver_calibration/memo.md`](memos/M003_receiver_calibration/memo.md)). Every equation used here is written out in § 4 under the memo's names (eq. Ps, eq. map, …).
 - **Section numbers** match the Deployment 5 interface spec, which builds on this one and covers eigsim, the synthetic-data generator and the D5 adapters. Its sections 7–9 have no counterpart here.
 
 ---
@@ -342,3 +342,4 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
 - **v0, 2026-09-14:** equations written out (§ 4.1–4.3 and a new § 4.5), so the spec no longer depends on memo M003 being at hand. No interface change.
 
   Sections changed: § 1, 3, 4, 6, 10.
+- **v0, 2026-09-14:** memo M003 now ships with the package as Markdown (`docs/memos/`), and the background links to it. No interface change.
