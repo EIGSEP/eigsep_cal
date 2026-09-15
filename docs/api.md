@@ -4,7 +4,7 @@
 
 This spec fixes eigsep_cal's conventions, forward model, data objects and stage API, so that code producing its inputs (data adapters, synthetic-data generators) and code consuming its outputs can be written against it.
 
-Items marked **Open** need a decision before code depends on them. Once a consumer is built on this spec, every change bumps the version and gets a line in the changelog (§ 12).
+Items marked **Open** need a decision before code depends on them. Once a consumer is built on this spec, every change gets a line in the changelog (§ 12). `SPEC_VERSION`, which every saved file carries and `load` must match exactly (§ 5.6), is bumped only when new code can no longer read a valid file written under the old version correctly: a field removed or renamed, or its meaning changed. Adding an optional field does not bump it, because files without the field load unchanged.
 
 **Background**
 - Calibration is staged and Bayesian. Each stage passes a posterior, not a point estimate; there is no single joint fit.
@@ -395,3 +395,6 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
 - **v0, 2026-09-15:** temperatures are never de-embedded (workspace Q-CHB-50). § 6 no longer allows removing the measured RFANT switch path from a calibrated spectrum. Stage 5 forward-models the switch path, the coax and the balun together with `embed`. No interface change, since eigsep_cal never implemented the removal.
 
   Sections changed: § 5.2, 6.
+- **v0, 2026-09-15:** versioning rule narrowed (workspace Q-CHB-36). `SPEC_VERSION` is bumped only when new code can no longer read a valid older file correctly. Additive changes, such as `Reflection.gamma_sys_modes`, get a changelog line and no bump. No interface change.
+
+  Sections changed: the introduction.
