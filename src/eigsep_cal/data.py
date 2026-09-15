@@ -29,6 +29,14 @@ def _series(name, value, n):
     return arr
 
 
+def _times(value, n):
+    """``times_unix`` as a finite, strictly increasing (n,) series."""
+    arr = _series("times_unix", value, n)
+    if not np.all(np.isfinite(arr)) or not np.all(np.diff(arr) > 0):
+        raise ValueError("times_unix must be finite and strictly increasing")
+    return arr
+
+
 def _antenna(value):
     if value not in ANTENNAS:
         raise ValueError(f"antenna must be one of {ANTENNAS}, got {value!r}")
@@ -61,7 +69,7 @@ class SkyTemperature:
             self,
             freqs_mhz=freqs,
             t_ant_k=t_ant,
-            times_unix=_series("times_unix", self.times_unix, n_time),
+            times_unix=_times(self.times_unix, n_time),
             elevation_deg=_series("elevation_deg", self.elevation_deg, n_time),
             azimuth_deg=_series("azimuth_deg", self.azimuth_deg, n_time),
             antenna=_antenna(self.antenna),
@@ -107,7 +115,7 @@ class Reflection:
             freqs_mhz=freqs,
             gamma=gamma,
             gamma_cov=cov,
-            times_unix=_series("times_unix", self.times_unix, n_meas),
+            times_unix=_times(self.times_unix, n_meas),
         )
 
     def save(self, path):
@@ -194,7 +202,7 @@ class Observation:
             freqs_mhz=freqs,
             power=power,
             state=state,
-            times_unix=_series("times_unix", self.times_unix, n_time),
+            times_unix=_times(self.times_unix, n_time),
             tau_s=tau,
             n_int=_readonly(n_int.astype(np.int64)),
             flags=_readonly(flags),

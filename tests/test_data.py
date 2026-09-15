@@ -10,6 +10,10 @@ CHAN = np.array([192, 208, 528])
 FREQS = d5_freqs_mhz(CHAN)
 N_TIME = 4
 
+# Two-sample time axes that must be rejected: repeated, decreasing, NaN,
+# and inf (np.diff gives inf > 0, so only a finiteness check sees it).
+BAD_TIMES = [[1.0, 1.0], [2.0, 1.0], [1.0, np.nan], [1.0, np.inf]]
+
 
 def observation(**overrides):
     kwargs = dict(
@@ -71,6 +75,11 @@ class TestSkyTemperature:
         with pytest.raises(ValueError, match="elevation_deg"):
             self._make(elevation_deg=[0.0])
 
+    @pytest.mark.parametrize("times", BAD_TIMES)
+    def test_times_must_be_finite_and_increasing(self, times):
+        with pytest.raises(ValueError, match="times_unix"):
+            self._make(times_unix=times)
+
 
 class TestReflection:
     def test_valid_and_readonly(self):
@@ -87,6 +96,11 @@ class TestReflection:
     def test_vna_path_rejected(self):
         with pytest.raises(ValueError, match="source"):
             reflection(source="VNAANT")
+
+    @pytest.mark.parametrize("times", BAD_TIMES)
+    def test_times_must_be_finite_and_increasing(self, times):
+        with pytest.raises(ValueError, match="times_unix"):
+            reflection(times_unix=times)
 
     def test_covariance_must_be_symmetric(self):
         cov = reflection().gamma_cov.copy()
@@ -179,6 +193,13 @@ class TestObservation:
 
     def test_chan_optional(self):
         assert observation(chan=None).chan is None
+
+    @pytest.mark.parametrize("times", BAD_TIMES)
+    def test_times_must_be_finite_and_increasing(self, times):
+        """A stale sync_time (~12 % of D5 files) scrambles sample times."""
+        times = np.concatenate([[-1.0, 0.0], times])
+        with pytest.raises(ValueError, match="times_unix"):
+            observation(times_unix=times)
 
     @pytest.mark.parametrize(
         "field, value",
