@@ -336,6 +336,16 @@ class TestRadiometerNoise:
                 np.random.default_rng(0),
             )
 
+    @pytest.mark.parametrize("bad", [-1.0, np.nan, np.inf])
+    def test_power_must_be_finite_and_non_negative(self, bad):
+        """Negative power raised numpy's "scale < 0"; NaN returned NaN."""
+        p = np.ones((2, 3))
+        p[1, 2] = bad
+        with pytest.raises(ValueError, match="power"):
+            radiometer_noise(
+                p, D5_ENBW_HZ, [0.5, 0.5], [1, 1], np.random.default_rng(0)
+            )
+
     def test_n_int_must_be_integer(self):
         with pytest.raises(ValueError, match="n_int"):
             radiometer_noise(

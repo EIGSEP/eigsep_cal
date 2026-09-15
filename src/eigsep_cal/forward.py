@@ -109,7 +109,7 @@ def radiometer_noise(power, enbw_hz, tau_s, n_int, rng):
     Parameters
     ----------
     power : array_like
-        Noiseless power, ``(n_time, n_freq)``.
+        Noiseless power, ``(n_time, n_freq)``; finite and >= 0.
     enbw_hz : float
         Equivalent noise bandwidth; ``conventions.D5_ENBW_HZ`` for D5.
     tau_s : array_like
@@ -125,6 +125,8 @@ def radiometer_noise(power, enbw_hz, tau_s, n_int, rng):
         Same shape as *power*.
     """
     p = v.float_array("power", power, ndim=2)
+    if not np.all(np.isfinite(p)) or not np.all(p >= 0):
+        raise ValueError("power must be finite and >= 0")
     tau = v.float_array("tau_s", tau_s, ndim=1)
     n = np.asarray(n_int)
     if not np.issubdtype(n.dtype, np.integer):
