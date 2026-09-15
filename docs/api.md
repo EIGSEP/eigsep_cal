@@ -45,7 +45,7 @@ Items marked **Open** need a decision before code depends on them. Once a consum
 ## 3. Reference plane and switch states
 
 **Reference plane P** is the common LNA-side node of the switch network.
-- Every state's switch path is part of its source: Γ_s by embedding, T_s by eq. availgain (§ 4.3).
+- Every state's switch path is part of its source: Γ_s by eq. embed, T_s by eq. availgain (§ 4.3).
 - The receiver reflection Γ_rec is measured at P.
 
 **State names** follow `eigsep_observing.client.OBS_MODES`; the rfswitch paths are `picohost.base.PicoRFSwitch.PATHS`.
@@ -60,7 +60,7 @@ Items marked **Open** need a decision before code depends on them. Once a consum
 | receiver | LNA input | — | `rec` (in `recs11`) | VNARF |
 
 **The antenna includes the balun and the balun–switch coax**
-- The switch comes after the coax from the antenna balun. The S11 chain and the in-situ calibration de-embed only switch paths, so for both of them the coax is part of the antenna. The measured Γ_ant includes the balun and coax, and so does the calibrated antenna temperature (§ 6).
+- The switch comes after the coax from the antenna balun. The S11 chain de-embeds only the `VNA*` switch paths, and the in-situ calibration works at P, so for both of them the coax is part of the antenna. The measured Γ_ant includes the balun and coax, and so does the calibrated antenna temperature (§ 6).
 - Free-space beam models (HFSS, eigsim) include no balun loss and no coax. A simulated `t_ant_k` (§ 5.1) therefore sits at a different plane from anything eigsep_cal measures or calibrates.
 - Calibration does not need the balun or coax S-parameters. Comparisons with simulations do: the generator (§ 4.3) and stage 5 model both, with priors where there are no measurements.
 
@@ -102,7 +102,7 @@ F_s = sqrt(1 − |Γ_rec|²) / (1 − Γ_s Γ_rec),    M_s = (1 − |Γ_s|²) |F
 |---|---|---|
 | `t_unc_k`, `t_cos_k`, `t_sin_k`, `t0_k` | `(n_freq,)` or `(n_time, n_freq)` | Rogers & Bowman parameterisation |
 | `t_r_k`, `t_l_k`, `c_k` | same; `c_k` complex | Intrinsic parameterisation (eq. map, below). Use either this set or the row above, selected by `parameterisation`. |
-| `gamma_rec` | `(n_freq,)` or `(n_time, n_freq)` complex | Measured at sparse epochs |
+| `gamma_rec` | `(n_freq,)` or `(n_time, n_freq)` complex | Measured at sparse epochs; mapping onto samples is open (§ 11). Finite, with \|Γ_rec\| < 1 |
 | `gain` | `(n_time, n_freq)` | Must be > 0 |
 | `path_gain_ratio` | `dict[state, (n_freq,)]` | Defaults to 1 |
 
@@ -125,27 +125,37 @@ T_cos − i T_sin = 2 sqrt(1 − |Γ_rec|²) (c + Γ_rec T_R)                   
 - Bucher et al. print T_unc without the factor 2 in the cross term. That version fails the § 10 test.
 
 ### 4.3 Source temperatures
-- **Path embedding.** `embed(gamma_term, t_term_k, sparams, t_path_k) -> (gamma_s, t_s_k)` is for a termination (Γ_t, T_t) on port 2 of a path at physical temperature T_p (port convention § 5.2):
+- **Path embedding.** `embed(gamma_term, t_term_k, sparams, t_path_k) -> (gamma_s, t_s_k)` takes a termination (Γ_t, T_t) behind a path at physical temperature T_p. It returns the source (Γ_s, T_s) that path and termination make together, seen from the path's reference side:
 
   ```
-  Γ_s = S11 + S12·S21 Γ_t / (1 − S22 Γ_t)
+  Γ_s = S11 + S12·S21 Γ_t / (1 − S22 Γ_t)                                    (eq. embed)
   T_s = G T_t + (1 − G) T_p,
-  G   = |S21|² (1 − |Γ_t|²) / ( |1 − S22 Γ_t|² (1 − |Γ_s|²) )               (eq. availgain)
+  G   = |S12·S21| (1 − |Γ_t|²) / ( |1 − S22 Γ_t|² (1 − |Γ_s|²) )             (eq. availgain)
   ```
 
-  - G is the available gain of the path (Monsalve et al. 2017, eqs. 8–9).
-  - |S21|² is taken as |S12·S21|, which assumes the path is reciprocal and passive.
+  - **Direction.** `embed` carries the termination outward, from the far end of the path to the reference side, and the port labels follow from that: port 2 carries the termination, and port 1 is the reference side. `embed` never runs it the other way; see § 5.2 for where de-embedding happens.
+  - **G** is the available gain of the path from port 2 to port 1. |S12·S21| stands for |S12|², the transmission in that direction; the two are equal for a reciprocal path. For a passive path 0 ≤ G ≤ 1.
+  - **Sources.**
+    - T_s = G T_t + (1 − G) T_p is Monsalve et al. (2017) eq. 8. It holds in any port labelling.
+    - Eqs. embed and availgain are Monsalve et al. (2024) eqs. 16 and 17, in our labels ("port 1 (2) being the balun output (input)"). Their eq. 17 is the balun efficiency, the generator's first step below. Eq. embed is also cmt_vna `calkit.embed_sparams`.
+    - Monsalve et al. (2017) eq. 9 prints G with S21 and S11, because their port 1 carries the termination. It is the mirror image of eq. availgain: the same gain, with the path read from the other end.
+    - Cross-check: edges-analysis `compute_cable_loss_from_scattering_params` (`edges/cal/loss.py`) computes the same G in the same labels, de-embedding the termination to port 2 and putting S22 in the denominator.
+  - **Direction matters more than labels.**
+    - *Labels read the wrong way round.* S11 where S22 belongs changes G by a fraction ≈ 2 Re[(S11 − S22) Γ_t], second order in small reflections. In eq. embed the same slip offsets Γ_s by ≈ S22 − S11, first order. Both vanish for a symmetric path. A label swap does not reverse the direction: the result still embeds, through the path turned round.
+    - *Direction reversed.* De-embedding inverts eq. availgain, T_t = (T_s − (1 − G) T_p) / G. Used where embedding belongs, it misplaces T_s by (1 − G²)(T_t − T_p) / G ≈ 2 (1 − G)(T_t − T_p): first order in the loss, even for a matched path.
+    - *The check.* Through a lossy path (0 < G < 1), embedding puts T_s strictly between T_t and T_p, and de-embedding puts it beyond T_t. `tests/test_network.py` tests this.
 - **Noise source** (generator only).
   - Diode excess temperature: T_ex = 290 K · 10^(ENR/10).
   - Behind a matched pad with loss factor L ≥ 1 at physical temperature T_pad, the source temperature before the path is (T_diode + T_ex) / L + (1 − 1/L) · T_pad.
 - **Fits never need this.** They use the effective constants T_NS and T_L (eq. TNSTL, § 4.5), with a prior on T_NS.
 - **Balun and coax** (generator only).
-  - The generator turns a free-space `t_ant_k` into the RFANT source with `embed`: first through a lossy balun two-port, then through the coax two-port at its physical temperature, then through the RFANT switch path. `gamma_term` is the free-space antenna reflection.
+  - The generator turns a free-space `t_ant_k` into the RFANT source with `embed`: first through a lossy balun two-port, then through the coax two-port at its physical temperature, then through the RFANT switch path.
+  - Each step embeds, with port 2 on the antenna side and the previous step's (Γ_s, T_s) as its termination. The first step's `gamma_term` is the free-space antenna reflection.
   - Where the two-ports are not measured, their parameters are drawn from a prior (cable type and length, datasheet loss, balun loss, cable temperature), and the draw is recorded in `provenance`.
   - Fits never need them, because the measured Γ_ant already includes both.
 
 ### 4.4 Noise
-- **Radiometer noise.** Per sample, σ² = P² / (B_eff · τ · n_int).
+- **Radiometer noise.** Per sample, σ² = P² / (B_eff · τ · n_int). `radiometer_noise` requires P finite and ≥ 0: power is a spectral density, so a negative P means non-physical model parameters, and σ would inherit its sign.
 - **Bandwidth.** `enbw_hz` defaults to Δν = 244 140.625 Hz, until the SNAP polyphase filterbank's equivalent noise bandwidth is measured (§ 11).
 - **Channel correlation.** Channels are independent in v0.
 
@@ -199,7 +209,7 @@ Built by the generator from sky-simulation output; consumed by the forward model
 |---|---|---|
 | `t_ant_k` | `(n_time, n_freq)` | Available noise temperature at the terminals of the free-space antenna model: everything the simulator models, meaning sky, horizon and ground. **No receiver term, no balun loss, no coax.** The generator adds the balun and everything after it with `embed` (§ 4.3). This is not the plane of a calibrated spectrum (§ 3). |
 | `freqs_mhz` | `(n_freq,)` | |
-| `times_unix` | `(n_time,)` | |
+| `times_unix` | `(n_time,)` | Finite, strictly increasing |
 | `antenna` | str | `"box-air"` or `"box-gnd"` |
 | `elevation_deg`, `azimuth_deg` | `(n_time,)` | Drive angles per sample; provenance only |
 | `meta` | dict | Simulator version and config; beam, horizon, sky and ground models, with any drawn parameters |
@@ -211,9 +221,14 @@ Built by the generator from sky-simulation output; consumed by the forward model
 | `s11`, `s12s21`, `s22` | `(n_freq,)` complex | Same layout as the rows of `switch_sparams.npz`: `[S11, S12·S21, S22]` |
 | `name` | str | For example `"RFANT"` or `"VNAANT"` |
 
-**Port convention:** cmt_vna `calkit`'s, which data-analysis's S11 chain (`scripts/calibrate_field_s11.py`) uses.
-- Γ' = S11 + S12·S21 Γ / (1 − S22 Γ): port 1 (`s11`) faces the reference side, and port 2 (`s22`) faces the termination.
-- The reference side is P for `RF*` paths and the VNA for `VNA*` paths.
+**Direction, then port labels.** An `SParams` describes a path that the signal crosses on its way from a termination to the point it is observed from. eigsep_cal uses it only in that direction (eq. embed, § 4.3), and the labels follow:
+- Port 2 (`s22`) is the end the termination sits on: the antenna side, a load, the SP1 cable. Port 1 (`s11`) is the reference side it is observed from: P for `RF*` paths, the VNA for `VNA*` paths.
+- These are the labels of cmt_vna `calkit.embed_sparams`, Γ' = S11 + S12·S21 Γ / (1 − S22 Γ), which data-analysis's S11 chain (`scripts/calibrate_field_s11.py`) uses, and of Monsalve et al. (2024). Two-port data measured the other way round need S11 and S22 swapped before they become an `SParams`.
+
+**Where de-embedding happens.**
+- `embed` is eigsep_cal's only two-port operation, and nothing in eigsep_cal inverts it, for Γ or for T.
+- Reflections are de-embedded upstream, in stage 2: `scripts/calibrate_field_s11.py` removes the `VNA*` switch path with `calkit.de_embed_sparams` (§ 6).
+- **Temperatures are never de-embedded** (decision 2026-09-15, workspace Q-CHB-50). Removing a path from a calibrated spectrum, T_t = (T_s − (1 − G) T_p) / G as in edges-analysis `apply_loss_correction`, is not done for any path. That includes the measured RFANT switch path, and it includes diagnostics. Stage 5 instead embeds a simulated `t_ant_k` through the balun, the coax and the RFANT switch path (§ 4.3, § 6).
 
 ### 5.3 `Reflection`
 The output of stage 2 (S11 calibration, which lives outside eigsep_cal, § 6), consumed by stage 3.
@@ -221,8 +236,8 @@ The output of stage 2 (S11 calibration, which lives outside eigsep_cal, § 6), c
 | Field | Shape | Notes |
 |---|---|---|
 | `gamma` | `(n_meas, n_freq)` complex | At P. For `RFANT` it includes the balun and coax (§ 3). |
-| `gamma_cov` | `(n_meas, n_freq, 2, 2)` | Covariance of (Re, Im) |
-| `times_unix` | `(n_meas,)` | Measurement time: S11 `metadata_snapshot_unix`, not the filename |
+| `gamma_cov` | `(n_meas, n_freq, 2, 2)` | Covariance of (Re, Im). Finite, symmetric and positive semi-definite, each to a relative 1e-8 |
+| `times_unix` | `(n_meas,)` | Measurement time: S11 `metadata_snapshot_unix`, not the filename. Finite, strictly increasing; S11 filenames are write times, so sort by this, not by file order |
 | `source` | str | A § 3 state name, or `"receiver"` |
 | `freqs_mhz` | `(n_freq,)` | |
 
@@ -233,7 +248,7 @@ The data vector for one antenna, from an adapter or the generator.
 |---|---|---|
 | `power` | `(n_time, n_freq)` | One integration or an average of several |
 | `state` | `(n_time,)` str | § 3 names only |
-| `times_unix` | `(n_time,)` | Sample centre |
+| `times_unix` | `(n_time,)` | Sample centre. Finite, strictly increasing |
 | `tau_s` | `(n_time,)` | Time per integration |
 | `n_int` | `(n_time,)` int | Integrations averaged into the sample |
 | `flags` | `(n_time, n_freq)` bool | `True` = bad |
@@ -294,14 +309,14 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
     -> (mean, cov)   # predictive power for held-out checks
 ```
 
-- `sources` is a `dict[state, Source]`. A `Source` holds `gamma_s` and `t_s_k`, each shaped `(1 or n_time, n_freq)`.
+- `sources` is a `dict[state, Source]`. A `Source` holds `gamma_s` and `t_s_k`, each shaped `(1 or n_time, n_freq)`. `gamma_s` is finite with |Γ_s| ≤ 1, because every source is passive; an ideal open or short (|Γ_s| = 1) is allowed, since M_s = 0 and T_s drops out of eq. Ps.
 - `CalibratedSpectrum` holds:
   - `t_ant_k` mean, `(n_time, n_freq)`;
   - either `cov` over frequency per time sample, or `draws`;
   - `flags`, `antenna`, `freqs_mhz`, `times_unix`, `provenance`.
 
   It is the input to stage 5.
-- **`CalibratedSpectrum.t_ant_k` is not a simulated free-space `t_ant_k`.** It is the RFANT source temperature at P, covering the antenna, balun, coax and RFANT switch path (§ 3). Measured S-parameters can remove the switch path; nothing in the calibration removes the balun and coax. To compare with simulations, stage 5 forward-models them and marginalises over their priors (§ 4.3).
+- **`CalibratedSpectrum.t_ant_k` is not a simulated free-space `t_ant_k`.** It is the RFANT source temperature at P, covering the antenna, balun, coax and RFANT switch path (§ 3). Nothing removes any of them, because temperatures are never de-embedded (§ 5.2). To compare with simulations, stage 5 forward-models all three with `embed`, the switch path from its measured S-parameters and the balun and coax from priors, and marginalises over their uncertainties (§ 4.3).
 - 3a comes before 3b because the model is bilinear in gain and noise waves. The v0 validation (§ 10) must compare the two-stage result with a joint fit on synthetic data, to measure what the split costs.
 
 **Stage 2 (S11 calibration) lives in data-analysis, not in eigsep_cal.**
@@ -333,13 +348,42 @@ predict(post_3a, post_3b, state, reflection, covariates, times_unix)
 | SNAP channel equivalent noise bandwidth and neighbour correlation | Noise model (§ 4.4) |
 | Latent switch state for `MISSING` rows | v1 |
 | Structured or sparse covariance for large blocks (dense above ~10⁴ parameters is too big) | v1 |
+| Time-varying path-gain ratios. § 4.2 and `ReceiverModel` accept `path_gain_ratio` as `(n_freq,)` only, but a generator needs drifting r_s to test the fit. Allow `(n_time, n_freq)`. Folding r_s(t) into `gain` row by row works, but then the recorded gain is no longer the common g that the coverage tests check. | `ReceiverModel`; generator |
+| Frequency grids of `SParams`, `Source` and `ReceiverModel`. None carries `freqs_mhz`, so the § 2 check cannot run on them. Shape checks catch a different channel count but not a different grid of the same length, and a length-1 `SParams` broadcasts silently in `embed`. `_validate.same_grid` exists, but nothing calls it. Either add `freqs_mhz` to these objects, or build them only inside stages and adapters from objects whose grids are checked. | Every stage; `embed`, `power` |
+| Batch axes in the forward model. § 2 promises `(..., n_time, n_freq)`, but `power`, `Source`, `ReceiverModel.gain` and `radiometer_noise` accept 2-D arrays only, so pushing `Posterior.draw` samples through `power` means a loop that rebuilds a `ReceiverModel` per draw. A closed-form Gaussian `predict` does not need batching; sampling Γ from `gamma_cov` does. Decide: batch these, or narrow § 2. | `predict`, § 10 held-out checks |
+| Mapping `Reflection` epochs onto samples. `Reflection` holds `(n_meas, n_freq)` at measurement times, while `Source.gamma_s` and `ReceiverModel.gamma_rec` are per sample. Undecided: the time mapping (nearest, interpolation, or piecewise constant between changepoints), how `gamma_cov` propagates, and the prior for samples far from any measurement, which matters because S11 epochs can be days apart. | `fit_noise_waves`, `calibrate`, `predict`; adapters |
 
 ---
 
 ## 12. Changelog
 - **v0, 2026-09-13:** first draft, as part of the Deployment 5 interface spec.
+- **v0, 2026-09-14:** four gaps found while building the v0 forward model, added as open items; no interface change yet.
+  - Drifting r_s against the fixed `(n_freq,)` `path_gain_ratio` (§ 4.2).
+  - No frequency grid on `SParams`, `Source` or `ReceiverModel`, so § 2's grid check cannot run on them.
+  - No batch axis in `power` and the objects it takes, against § 2.
+  - No rule for mapping `Reflection` epochs onto samples; the `gamma_rec` note now says epochs are sparse.
+
+  Sections changed: § 4.2, 11.
 - **v0, 2026-09-14:** split out of that spec, with the same section numbers. The sections on eigsim, the D5 adapters and the generator's truth model (§ 7–9), and D5-specific notes elsewhere, stay in the D5 spec. No interface change.
 - **v0, 2026-09-14:** equations written out (§ 4.1–4.3 and a new § 4.5), so the spec no longer depends on memo M003 being at hand. No interface change.
 
   Sections changed: § 1, 3, 4, 6, 10.
 - **v0, 2026-09-14:** memo M003 now ships with the package as Markdown (`docs/memos/`), and the background links to it. No interface change.
+- **v0, 2026-09-15:** two-port direction written down (PR #2 review). Documentation fix only: no interface change, and `embed` computes exactly what it did.
+  - Memo M003's eq. availgain had S11 where § 4.3 and `embed` have S22. Both were right, in opposite port labels; the memo now uses ours.
+  - § 4.3 states the direction, names eq. embed, writes G with |S12·S21|, and cites Monsalve et al. (2024) eqs. 16–17, which use our labels. Monsalve et al. (2017) eq. 8 stays the source of T_s = G T_t + (1 − G) T_p.
+  - § 5.2 leads with the direction, and the port labels follow from it.
+  - § 5.2 says where de-embedding happens: reflections upstream in stage 2, and `embed` is eigsep_cal's only two-port operation. § 6's option to remove the measured RFANT switch path is unchanged, and is now named as a temperature de-embedding.
+  - § 3 no longer says the in-situ calibration de-embeds switch paths; it works at P, with each path embedded in its source.
+
+  Sections changed: § 3, 4.3, 5.2, 6 (wording only; § 6 keeps its meaning).
+- **v0, 2026-09-15:** input checks that the forward model now enforces, written into the spec (PR #2 review). Invalid inputs are rejected at construction; valid ones compute exactly as before, and a `gamma_cov` symmetric only to roundoff is now accepted.
+  - `times_unix` is finite and strictly increasing in `SkyTemperature`, `Reflection` and `Observation` (§ 5.1, 5.3, 5.4).
+  - `Reflection.gamma_cov` is finite, symmetric and positive semi-definite, each to a relative 1e-8 (§ 5.3).
+  - `ReceiverModel.gamma_rec` is finite with |Γ_rec| < 1 (§ 4.2). `Source.gamma_s` is finite with |Γ_s| ≤ 1 (§ 6).
+  - `radiometer_noise` takes finite power ≥ 0 (§ 4.4).
+
+  Sections changed: § 4.2, 4.4, 5.1, 5.3, 5.4, 6.
+- **v0, 2026-09-15:** temperatures are never de-embedded (workspace Q-CHB-50). § 6 no longer allows removing the measured RFANT switch path from a calibrated spectrum. Stage 5 forward-models the switch path, the coax and the balun together with `embed`. No interface change, since eigsep_cal never implemented the removal.
+
+  Sections changed: § 5.2, 6.

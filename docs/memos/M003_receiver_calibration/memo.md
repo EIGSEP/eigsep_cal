@@ -1,6 +1,6 @@
 # EIGSEP D5 Memo M003: Receiver calibration — the equations to solve, their inputs, and what deployment 5 can support
 
-> Generated from `memos/M003_receiver_calibration/memo.tex` at manuscript commit `5b9a8fa` of the EIGSEP Deployment 5 analysis by `scripts/memo2md.py`. Do not edit by hand: change the LaTeX source and regenerate.
+> Generated from `memos/M003_receiver_calibration/memo.tex` at manuscript commit `dbe0160` of the EIGSEP Deployment 5 analysis by `scripts/memo2md.py`. Do not edit by hand: change the LaTeX source and regenerate.
 
 ## Abstract
 
@@ -90,14 +90,24 @@ The equation assumes:
 
 5.  $T_s$ including any lossy path between the physical source and $\mathcal P$.
 
-For the last point, a termination at $T_t$ behind a path at $T_p$ has
+For the last point, take a termination with reflection coefficient $\Gamma_t$ and noise temperature $T_t$ behind a path at physical temperature $T_p$. Seen from $\mathcal P$, path and termination together are a source with
+
+```math
+\Gamma_s=S_{11}+\frac{S_{12}S_{21}\,\Gamma_t}{1-S_{22}\Gamma_t},\tag{embed}
+```
 
 ```math
 T_s=G\,T_t+(1-G)\,T_p,\qquad
-G=\frac{|S_{21}|^2(1-|\Gamma_t|^2)}{|1-S_{11}\Gamma_t|^2(1-|\Gamma_s|^2)}\tag{availgain}
+G=\frac{|S_{12}|^2(1-|\Gamma_t|^2)}{|1-S_{22}\Gamma_t|^2(1-|\Gamma_s|^2)}.\tag{availgain}
 ```
 
-(Monsalve et al. 2017, eqs. 8–9). REACH applies the same relation to every cabled calibrator (Roque et al. 2025).
+**Direction fixes the ports.** Both equations *embed*: they carry the termination outward through the path to what is seen looking into it from $\mathcal P$, and the port labels follow from that direction. Port 2 is the end the termination is attached to, port 1 is the end we look in from, and the signal crosses from port 2 to port 1. $G$ is the available gain along that crossing; for a reciprocal path $|S_{12}|^2=|S_{21}|^2=|S_{12}S_{21}|$.
+
+- *Sources.* $T_s=G\,T_t+(1-G)\,T_p$ is Monsalve et al. (2017, eq. 8) and holds in any labelling. Eqs. (embed) and (availgain) are Monsalve et al. (2024, eqs. 16 and 17), in the same labels (“port 1 (2) being the balun output (input)”); their eq. 17 is the balun efficiency, which takes a free-space antenna temperature through a lossy balun. Monsalve et al. (2017, eq. 9) print the mirror image, with $S_{21}$ and $S_{11}$, because their port 1 carries the termination. It is the same gain, with the path read from the other end. The EDGES pipeline (edges-analysis, `compute_cable_loss_from_scattering_params`) uses our labels.
+
+- *Direction matters more than labels.* Putting $S_{11}$ where $S_{22}$ belongs in eq. (availgain) changes $G$ by a fraction $\approx2\operatorname{Re}[(S_{11}-S_{22})\Gamma_t]$: second order in small reflections, and zero for a symmetric path. In eq. (embed) the same slip offsets $\Gamma_s$ by $\approx S_{22}-S_{11}$, first order. Swapping the labels does not reverse the direction; the result still embeds, through the path turned round. Reversing the direction is de-embedding, $T_t=[T_s-(1-G)\,T_p]/G$. Used where eq. (availgain) belongs, it misplaces $T_s$ by $(1-G^2)(T_t-T_p)/G\approx2(1-G)(T_t-T_p)$, which is first order in the loss even for a matched path. Through a lossy path ($0<G<1$), embedding always puts $T_s$ strictly between $T_t$ and $T_p$.
+
+REACH applies the same relation to every cabled calibrator (Roque et al. 2025).
 
 ## 4. Reconciliation with Bucher et al. (2026)
 
@@ -186,7 +196,7 @@ T_{\mathrm{NS}}=C_1T^a_{\mathrm{NS}},\qquad T_{\mathrm{L}}=T^a_L-C_2 .\tag{C1C2}
 
 $C_1$ and $C_2$ are not ad hoc corrections. By eq. (TNSTL) they are the two reference constants, and they absorb the references’ mismatch, path gains and the receiver offset. Roque et al. (2021) absorb them the same way, and MIST’s $(g_R,T_R)$ form is eq. (cal) solved for $T_A$ (Monsalve et al. 2024).
 
-**Drifting reference temperatures.** $T_{\mathrm{NS}}$ and $T_{\mathrm{L}}$ contain the references’ physical temperatures through $D_L$ and $D_N$. In Deployment 5 the references are on different ports: $L$=RFAMB at $T_{\mathrm{amb}}$ (`tempctrl_load.T_now`) and $N$=RFNON, whose pad temperature is not measured directly. The three `rfswitch_therm` thermistors sit on the switch PCB (CHB; Q-CHB-10, resolved). Without temperature control, both constants should be modelled as linear in the logged temperatures, e.g. $T_{\mathrm{L}}(t)=T_{\mathrm{L}}^0+\kappa_L[T_{\mathrm{amb}}(t)-\bar T_{\mathrm{amb}}]$. The system stays linear.
+**Drifting reference temperatures.** $T_{\mathrm{NS}}$ and $T_{\mathrm{L}}$ contain the references’ physical temperatures through $D_L$ and $D_N$. In Deployment 5 the references are on different ports: $L$=RFAMB at $T_{\mathrm{amb}}$ (`tempctrl_load.T_now`) and $N$=RFNON, whose 30 dB pad sits on the switch board with the noise source. The three `rfswitch_therm` thermistors are on that board (CHB; Q-CHB-10, Q-CHB-51), so they proxy the pad temperature. Which channel reads the pad is not certain, but the three read close to each other. Without temperature control, both constants should be modelled as linear in the logged temperatures, e.g. $T_{\mathrm{L}}(t)=T_{\mathrm{L}}^0+\kappa_L[T_{\mathrm{amb}}(t)-\bar T_{\mathrm{amb}}]$. The system stays linear.
 
 Only gain changes common to all paths cancel in $Q_s$. The path-gain ratios $g_L/g$ and $g_N/g$ must therefore be stable.
 
@@ -194,7 +204,7 @@ A prior on $T_{\mathrm{NS}}$ is more than the diode’s ENR. By eq. (TNSTL), wi
 
 - the ENR and pad attenuation: **ENR 35 dB behind a 30 dB pad, a net 5 dB** (CHB, 2026-09-14; Q-CGT-05, resolved), so the on$-$off excess at the switch is $290\,\mathrm{K}\cdot10^{0.5}\simeq917$ K, independent of the pad temperature. This is a nameplate value, not a measurement, so the prior needs a width (**\[TODO: set it from a lab ENR measurement, IMP-05\]**);
 
-- the pad temperature minus the ambient-load temperature;
+- the pad temperature minus the ambient-load temperature, logged through the switch-board thermistors as a proxy (Q-CHB-51);
 
 - the RFNON vs RFAMB mismatch;
 
@@ -414,7 +424,7 @@ Notebook `003` (section D), with `001`, gives the following:
 | Temperature contrast               | RFAMB heated via `tempctrl_load`                                     | load read 37–47 $^\circ$C on Jul 12–13 (controller drive zero; Q-CHB-26), but no load-like spectra while warm (nb. 006 §4; Q-CHB-18)    | post-deployment lab hot/cold loads; $T_{\mathrm{NS}}$ prior (ENR, pad, $T_{\mathrm{pad}}-T_{\mathrm{amb}}$, NON/AMB mismatch, path-gain ratio; eq. TNSTL); sky-model scale (degenerate with beam and ground) |
 | $\Gamma_s$, $\Gamma_{\mathrm{rx}}$ | VNA after internal OSL                                               | 14 hourly pairs in night 16/17, sparse otherwise (Q-CHB-32); 7 with singular OSL solve (`cmt_vna` \#54)                                 | stage 2 (notebook `013`, with borrowed OSLs)                                                                                                                                                                 |
 | Path S-parameters to $\mathcal P$  | lab file `switch_sparams.npz` (7 switch paths)                       | final (Q-CGT-02); measured after the fall with the instrument disassembled, each path at its port’s connector face (Q-CGT-03, Q-CGT-11) | fitted path delays and losses if unusable                                                                                                                                                                    |
-| Physical temperatures              | `tempctrl_load.T_now`; `rfswitch_therm` (switch PCB); SP1 cable; LNA | load OK; switch-PCB readings need cleaning; SP1 cable temperature not logged and type unknown (Q-CHB-33); `tempctrl_lna` dead           | switch-PCB temperature as a proxy for the in-box paths                                                                                                                                                       |
+| Physical temperatures              | `tempctrl_load.T_now`; `rfswitch_therm` (switch PCB); SP1 cable; LNA | load OK; switch-PCB readings need cleaning; SP1 cable temperature not logged and type unknown (Q-CHB-33); `tempctrl_lna` dead           | switch-PCB temperature as a proxy for the in-box paths and the noise-source pad                                                                                                                              |
 | Receiver stability                 | no LNA temperature control in Deployment 5                           | $\Gamma_{\mathrm{rx}}$ measured hourly only on night 16/17 (Q-CHB-32)                                                                   | fit per epoch; intrinsic parameterisation (Section 4)                                                                                                                                                        |
 
 ### 7.1 What Deployment 5 can support
@@ -431,7 +441,7 @@ Notebook `003` (section D), with `001`, gives the following:
 
     The LNAs and switches survived the fall (CHB; Q-CHB-09, resolved). A post-deployment lab calibration of the same receiver, with external hot and cold loads and cables, can therefore supply $T_{\mathrm{NS}}$ and the noise-wave parameters, as in Monsalve et al. (2017) and Monsalve et al. (2024). The result transfers to the field under case (iii) of Section 4, with the field AMB, NON and SP1 data as the check.
 
-    The coax from the antenna balun to the switch did not survive, so its S-parameters cannot be measured. It is on the antenna side of $\mathcal P$. The S11 chain and the in-situ calibration de-embed only switch paths, so for both of them the antenna source is the antenna, balun and coax together. The coax enters $\Gamma_s$ for the antenna and the efficiency correction, not the receiver calibration. The beam models are free space and include neither the balun nor the coax (CHB), so the calibrated $T_{\mathrm{ant}}$ is not at the plane of a simulated antenna temperature. Calibration needs no coax model. Comparisons with simulations do, with priors on the coax loss and temperature.
+    The coax from the antenna balun to the switch did not survive, so its S-parameters cannot be measured. It is on the antenna side of $\mathcal P$. The S11 chain de-embeds only the `VNA*` switch paths, and the in-situ calibration works at $\mathcal P$, so for both of them the antenna source is the antenna, balun and coax together. The coax enters $\Gamma_s$ for the antenna and the stage-5 forward model, not the receiver calibration. Nothing is de-embedded from the spectra, not even the measured switch path: stage 5 embeds the balun, the coax and the switch path together (Q-CHB-50). The beam models are free space and include neither the balun nor the coax (CHB), so the calibrated $T_{\mathrm{ant}}$ is not at the plane of a simulated antenna temperature. Calibration needs no coax model. Comparisons with simulations do, with priors on the coax loss and temperature.
 
 ## 8. Decisions and implications
 
@@ -439,7 +449,7 @@ Notebook `003` (section D), with `001`, gives the following:
 
 2.  Keep the standard noise-wave form. Run the intrinsic (Bucher) parameterisation, with coefficients from the measured $\Gamma_{\mathrm{rx}}(t)$, as a variant and compare the two fits.
 
-3.  Take $\mathcal P$ as the common LNA-side node of the switch network. Every state’s path is part of its source ($\Gamma_s$ by embedding, $T_s$ by eq. availgain). This makes the lab switch-path S-parameters a hard requirement for stage 2.
+3.  Take $\mathcal P$ as the common LNA-side node of the switch network. Every state’s path is part of its source ($\Gamma_s$ by eq. embed, $T_s$ by eq. availgain). This makes the lab switch-path S-parameters a hard requirement for stage 2.
 
 4.  For Deployment 5:
 
