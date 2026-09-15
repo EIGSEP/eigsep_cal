@@ -6,12 +6,17 @@ import numpy as np
 
 from . import _validate as v
 
+# Slack on |gamma_s| <= 1: |exp(i theta)| computes up to 1 + 2.2e-16.
+_PASSIVE_SLACK = 1e-12
+
 
 @dataclass(frozen=True)
 class Source:
     """A source at reference plane P: reflection and noise temperature.
 
-    Both arrays have shape ``(1 or n_time, n_freq)`` (spec § 6).
+    Both arrays have shape ``(1 or n_time, n_freq)`` (spec § 6). Every
+    source is passive, so ``|gamma_s| <= 1``; 1 (an ideal short or
+    open) is allowed.
     """
 
     gamma_s: np.ndarray
@@ -22,6 +27,8 @@ class Source:
         t_s = v.float_array("t_s_k", self.t_s_k, ndim=2)
         if gamma.shape != t_s.shape:
             raise ValueError("gamma_s and t_s_k must share one shape")
+        if not np.all(np.abs(gamma) <= 1 + _PASSIVE_SLACK):
+            raise ValueError("gamma_s must satisfy |gamma_s| <= 1 (passive)")
         object.__setattr__(self, "gamma_s", gamma)
         object.__setattr__(self, "t_s_k", t_s)
 

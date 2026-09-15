@@ -290,6 +290,27 @@ class TestPower:
         with pytest.raises(ValueError, match="share one shape"):
             Source(np.zeros((1, N_FREQ)), np.zeros((1, N_FREQ + 1)))
 
+    @pytest.mark.parametrize("bad", [1.0 + 1e-9, -1.2, 0.8 + 0.8j, np.nan])
+    def test_source_reflection_must_be_passive(self, bad):
+        gamma = np.zeros((1, N_FREQ), dtype=complex)
+        gamma[0, 1] = bad
+        with pytest.raises(ValueError, match="gamma_s"):
+            Source(gamma, np.full((1, N_FREQ), 300.0))
+
+    def test_lossless_source_accepted(self):
+        """|Gamma_s| = 1 (ideal short or open) is finite in eq. Ps, and
+        M_s = 0 there, so T_s drops out. Roundoff just above 1 passes."""
+        gamma = np.array([[-1.0, 1j, np.nextafter(1.0, 2.0), np.exp(0.3j)]])
+        receiver = _receiver(gamma_rec=np.full(N_FREQ, 0.2 - 0.1j))
+        got = []
+        for t_s in (800.0, 0.0):
+            sources = _sources()
+            sources["RFANT"] = Source(gamma, np.full((1, N_FREQ), t_s))
+            got.append(power(sources, receiver, STATE, TIMES))
+        hot, cold = got
+        assert np.all(np.isfinite(hot))
+        np.testing.assert_allclose(hot, cold, rtol=1e-12)
+
 
 class TestRadiometerNoise:
     def _draw(self, n_int, seed=0, n_time=20000):
