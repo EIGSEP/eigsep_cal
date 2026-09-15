@@ -94,6 +94,9 @@ class Reflection:
             raise ValueError("gamma_cov must be symmetric")
         if np.any(cov[..., 0, 0] < 0) or np.any(cov[..., 1, 1] < 0):
             raise ValueError("gamma_cov variances must be >= 0")
+        off = 0.5 * (unit[..., 0, 1] + unit[..., 1, 0])
+        if np.any(unit[..., 0, 0] * unit[..., 1, 1] - off**2 < -_COV_RTOL):
+            raise ValueError("gamma_cov must be positive semi-definite")
         if self.source not in REFLECTION_SOURCES:
             raise ValueError(
                 f"source must be one of {REFLECTION_SOURCES}, "

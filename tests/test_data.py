@@ -127,6 +127,31 @@ class TestReflection:
         with pytest.raises(ValueError, match="finite"):
             reflection(gamma_cov=cov)
 
+    @pytest.mark.parametrize(
+        "variance, off_diagonal",
+        [(1e-12, 1.0), (1e-6, 1e-6 * (1 + 1e-6))],
+    )
+    def test_covariance_must_be_positive_semidefinite(
+        self, variance, off_diagonal
+    ):
+        """Correlation 1e12, and correlation 1 + 1e-6 (beyond roundoff)."""
+        cov = reflection().gamma_cov.copy()
+        cov[0, 1, 0, 0] = cov[0, 1, 1, 1] = variance
+        cov[0, 1, 0, 1] = cov[0, 1, 1, 0] = off_diagonal
+        with pytest.raises(ValueError, match="positive semi-definite"):
+            reflection(gamma_cov=cov)
+
+    def test_rank_one_covariance_accepted(self):
+        """sigma^2 u u^T is PSD, but roundoff leaves some determinants
+        slightly negative."""
+        rng = np.random.default_rng(1)
+        u = rng.normal(size=(2, FREQS.size, 2))
+        var = rng.uniform(1e-8, 1e-4, (2, FREQS.size))
+        cov = var[..., None, None] * u[..., :, None] * u[..., None, :]
+        det = cov[..., 0, 0] * cov[..., 1, 1] - cov[..., 0, 1] ** 2
+        assert np.any(det < 0)
+        reflection(gamma_cov=cov)
+
     def test_grid_shape_checked(self):
         with pytest.raises(ValueError, match="gamma"):
             reflection(gamma=np.zeros((2, FREQS.size + 1)))
