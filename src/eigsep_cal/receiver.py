@@ -72,6 +72,11 @@ class ReceiverModel:
 
         gamma = v.complex_array("gamma_rec", self.gamma_rec)
         v.check_shape("gamma_rec", gamma, *allowed)
+        if not np.all(np.abs(gamma) < 1):
+            raise ValueError(
+                "gamma_rec must satisfy |gamma_rec| < 1; the model takes "
+                "sqrt(1 - |gamma_rec|^2)"
+            )
         object.__setattr__(self, "gamma_rec", gamma)
 
         wanted, unwanted = (

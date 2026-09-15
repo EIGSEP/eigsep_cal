@@ -94,6 +94,14 @@ class TestReceiverModel:
                 gamma_rec=np.zeros(N_FREQ), gain=gain, **_rb_kwargs()
             )
 
+    @pytest.mark.parametrize("bad", [1.0, -1.0 - 1e-9, 1j, np.nan])
+    def test_gamma_rec_must_be_inside_unit_circle(self, bad):
+        """power takes sqrt(1 - |gamma_rec|^2), NaN beyond |gamma_rec| = 1."""
+        gamma = np.full(N_FREQ, 0.1 + 0j)
+        gamma[1] = bad
+        with pytest.raises(ValueError, match="gamma_rec"):
+            ReceiverModel(gamma_rec=gamma, gain=_gain(), **_rb_kwargs())
+
     def test_shapes_checked(self):
         kwargs = _rb_kwargs()
         kwargs["t_cos_k"] = np.ones(N_FREQ + 1)
