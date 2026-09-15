@@ -1,6 +1,6 @@
 # EIGSEP D5 Memo M003: Receiver calibration — the equations to solve, their inputs, and what deployment 5 can support
 
-> Generated from `memos/M003_receiver_calibration/memo.tex` at manuscript commit `9946e9b` of the EIGSEP Deployment 5 analysis by `scripts/memo2md.py`. Do not edit by hand: change the LaTeX source and regenerate.
+> Generated from `memos/M003_receiver_calibration/memo.tex` at manuscript commit `5b9a8fa` of the EIGSEP Deployment 5 analysis by `scripts/memo2md.py`. Do not edit by hand: change the LaTeX source and regenerate.
 
 ## Abstract
 
@@ -18,7 +18,7 @@ This memo reduces the receiver-calibration literature to one linear equation per
 
 ## 1. Question and scope
 
-Which equations convert the measured autocorrelation $P_{\mathrm{ant}}$ of the suspended antenna into the antenna temperature $T_{\mathrm{ant}}$ at the receiver reference plane? What inputs do they need, and which of those did Deployment 5 record? This is the receiver half of the calibration model in the instrument paper (§4.1–4.2; **\[TODO: cite EIGSEP instrument paper, no bib entry yet\]**), $P_{\mathrm{ant}}=g_{\mathrm{rx}}(T_{\mathrm{ant}}+T_{\mathrm{rx}})$.
+Which equations convert the measured autocorrelation $P_{\mathrm{ant}}$ of the suspended antenna into the antenna temperature $T_{\mathrm{ant}}$ at the receiver reference plane? What inputs do they need, and which of those did Deployment 5 record? This is the receiver half of the calibration model in the instrument paper (Bye et al. 2026, §4.1–4.2), $P_{\mathrm{ant}}=g_{\mathrm{rx}}(T_{\mathrm{ant}}+T_{\mathrm{rx}})$.
 
 In scope:
 
@@ -149,7 +149,7 @@ The two parameter sets transfer differently when $\Gamma_r$ differs between cali
 
 3.  *$\Gamma_r$ changes because the LNA itself changed* (temperature, bias, ageing). Neither set is invariant; recalibrate or model the dependence.
 
-In short, Bucher et al. are right that the intrinsic description is the physically invariant one. They are wrong that the standard equation is in error. EDGES lab calibrations carried to the field are exposed to cases (ii) and (iii); EIGSEP’s in-situ switching is case (i). Because eq. (map) is linear, one can also fit $(T_R,T_L,c)$ while evaluating the coefficients with the hourly measured $\Gamma_{\mathrm{rx}}(t)$. This costs nothing and tests case (ii) against case (iii).
+In short, Bucher et al. are right that the intrinsic description is the physically invariant one. They are wrong that the standard equation is in error. EDGES lab calibrations carried to the field are exposed to cases (ii) and (iii); EIGSEP’s in-situ switching is case (i). Because eq. (map) is linear, one can also fit $(T_R,T_L,c)$ while evaluating the coefficients with the measured $\Gamma_{\mathrm{rx}}(t)$. This costs nothing and tests case (ii) against case (iii).
 
 ## 5. Removing the gain: the linear calibration equation
 
@@ -342,7 +342,7 @@ Through 2025 the EIGSEP front end used a MIST-style network of SPDT switches. I
 
 - RFNON/RFNOFF (noise diode on/off behind a pad);
 
-- RFSP1 (a 3 m coax ending in an open/short switch; length from CHB, 2026-09-14, Q-CGT-06. Its 31 ns measured round trip implies a velocity factor of 0.65–0.69, i.e. a solid dielectric; the type itself is still unknown, as is the cable temperature);
+- RFSP1 (a 3 m coax ending in an open/short switch; length from CHB, 2026-09-14. Its 31 ns measured round trip implies a velocity factor of 0.65–0.69, i.e. a solid dielectric; the type itself is still unknown (Q-CHB-33), and the cable temperature was not logged);
 
 - RFSP2 (unused).
 
@@ -394,7 +394,7 @@ Notebook `003` (section D), with `001`, gives the following:
 
   - Receiver input: $-9.4$ dB, stable across the night. This is a poor match that amplifies every noise-wave term.
 
-- *S11 quality.* For 7 of the 14 night `ants11` files the ideal-OSL solve is singular in at least one channel.
+- *S11 quality.* For 7 of the 14 night `ants11` files the ideal-OSL solve is singular in at least one channel. The cause is the `cmt_vna` cold-start trigger bug (issue \#54), which zero-fills the sweeps at session start (Q-CGT-09, resolved). Notebook `013` therefore borrows a usable internal OSL for 66 of 127 epochs; only 7 of 20 antenna-mode files have their own.
 
 ![Figure 3](figures/003_d5_s11.png)
 
@@ -406,16 +406,16 @@ Notebook `003` (section D), with `001`, gives the following:
 
 **Table 3.** Inputs to eq. (cal): where EIGSEP measures them, their Deployment 5 status, and bridges.
 
-| Input                              | EIGSEP source                                                        | Deployment 5 status                                                                                                                  | Bridge if missing                                                                                                                                                                                            |
-|:-----------------------------------|:---------------------------------------------------------------------|:-------------------------------------------------------------------------------------------------------------------------------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| $P_{\mathrm{ant}}$                 | RFANT, key 4 (phase C)                                               | 44 h, plus `MISSING` rows that look like antenna                                                                                     | —                                                                                                                                                                                                            |
-| $P_L$, $P_N$                       | RFAMB, RFNON                                                         | 1.3 h and 1.1 h; 60 s visits every $\sim$<!-- -->12 min in night 16/17                                                               | gain interpolation between visits                                                                                                                                                                            |
-| $P_s$ with known $T_s$             | RFSP1 open/short; RFNOFF                                             | SP1 open and short $\approx2$ min each on Jul 17 20:19–20:59 MDT (usable; nb. 006); Jul 15 comb-contaminated; NOFF 18 s on Jul 15    | post-deployment lab calibration (LNAs and switches survived)                                                                                                                                                 |
-| Temperature contrast               | RFAMB heated via `tempctrl_load`                                     | load read 37–47 $^\circ$C on Jul 12–13 (controller drive zero; Q-CHB-26), but no load-like spectra while warm (nb. 006 §4; Q-CHB-18) | post-deployment lab hot/cold loads; $T_{\mathrm{NS}}$ prior (ENR, pad, $T_{\mathrm{pad}}-T_{\mathrm{amb}}$, NON/AMB mismatch, path-gain ratio; eq. TNSTL); sky-model scale (degenerate with beam and ground) |
-| $\Gamma_s$, $\Gamma_{\mathrm{rx}}$ | VNA after internal OSL                                               | 14 hourly pairs in night 16/17; 7 with singular OSL solve                                                                            | stage 2                                                                                                                                                                                                      |
-| Path S-parameters to $\mathcal P$  | lab file `switch_sparams.npz` (7 switch paths)                       | located 2026-09-13 in `field_cal_data_2026`; whether it is final is to be confirmed (logbook)                                        | fitted path delays and losses if unusable                                                                                                                                                                    |
-| Physical temperatures              | `tempctrl_load.T_now`; `rfswitch_therm` (switch PCB); SP1 cable; LNA | load OK; switch-PCB readings need cleaning; SP1 cable unknown (Q-CGT-06); `tempctrl_lna` dead                                        | switch-PCB temperature as a proxy for the in-box paths                                                                                                                                                       |
-| Receiver stability                 | no LNA temperature control in Deployment 5                           | $\Gamma_{\mathrm{rx}}$ measured hourly                                                                                               | fit per epoch; intrinsic parameterisation (Section 4)                                                                                                                                                        |
+| Input                              | EIGSEP source                                                        | Deployment 5 status                                                                                                                     | Bridge if missing                                                                                                                                                                                            |
+|:-----------------------------------|:---------------------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| $P_{\mathrm{ant}}$                 | RFANT, key 4 (phase C)                                               | 44 h, plus `MISSING` rows that look like antenna                                                                                        | —                                                                                                                                                                                                            |
+| $P_L$, $P_N$                       | RFAMB, RFNON                                                         | 1.3 h and 1.1 h; 60 s visits every $\sim$<!-- -->12 min in night 16/17                                                                  | gain interpolation between visits                                                                                                                                                                            |
+| $P_s$ with known $T_s$             | RFSP1 open/short; RFNOFF                                             | SP1 open and short $\approx2$ min each on Jul 17 20:19–20:59 MDT (usable; nb. 006); Jul 15 comb-contaminated; NOFF 18 s on Jul 15       | post-deployment lab calibration (LNAs and switches survived)                                                                                                                                                 |
+| Temperature contrast               | RFAMB heated via `tempctrl_load`                                     | load read 37–47 $^\circ$C on Jul 12–13 (controller drive zero; Q-CHB-26), but no load-like spectra while warm (nb. 006 §4; Q-CHB-18)    | post-deployment lab hot/cold loads; $T_{\mathrm{NS}}$ prior (ENR, pad, $T_{\mathrm{pad}}-T_{\mathrm{amb}}$, NON/AMB mismatch, path-gain ratio; eq. TNSTL); sky-model scale (degenerate with beam and ground) |
+| $\Gamma_s$, $\Gamma_{\mathrm{rx}}$ | VNA after internal OSL                                               | 14 hourly pairs in night 16/17, sparse otherwise (Q-CHB-32); 7 with singular OSL solve (`cmt_vna` \#54)                                 | stage 2 (notebook `013`, with borrowed OSLs)                                                                                                                                                                 |
+| Path S-parameters to $\mathcal P$  | lab file `switch_sparams.npz` (7 switch paths)                       | final (Q-CGT-02); measured after the fall with the instrument disassembled, each path at its port’s connector face (Q-CGT-03, Q-CGT-11) | fitted path delays and losses if unusable                                                                                                                                                                    |
+| Physical temperatures              | `tempctrl_load.T_now`; `rfswitch_therm` (switch PCB); SP1 cable; LNA | load OK; switch-PCB readings need cleaning; SP1 cable temperature not logged and type unknown (Q-CHB-33); `tempctrl_lna` dead           | switch-PCB temperature as a proxy for the in-box paths                                                                                                                                                       |
+| Receiver stability                 | no LNA temperature control in Deployment 5                           | $\Gamma_{\mathrm{rx}}$ measured hourly only on night 16/17 (Q-CHB-32)                                                                   | fit per epoch; intrinsic parameterisation (Section 4)                                                                                                                                                        |
 
 ### 7.1 What Deployment 5 can support
 
@@ -437,7 +437,7 @@ Notebook `003` (section D), with `001`, gives the following:
 
 1.  Solve eq. (cal) directly by (G)LS (eq. gls) with a Chebyshev basis and $\kappa$ monitoring. Report $C_1,C_2$ through eq. (C1C2) only for comparison with EDGES and MIST. Implement it in `code/src` with tests, and propose it to `eigsep_cal` if generally useful.
 
-2.  Keep the standard noise-wave form. Run the intrinsic (Bucher) parameterisation, with coefficients from the hourly $\Gamma_{\mathrm{rx}}(t)$, as a variant and compare the two fits.
+2.  Keep the standard noise-wave form. Run the intrinsic (Bucher) parameterisation, with coefficients from the measured $\Gamma_{\mathrm{rx}}(t)$, as a variant and compare the two fits.
 
 3.  Take $\mathcal P$ as the common LNA-side node of the switch network. Every state’s path is part of its source ($\Gamma_s$ by embedding, $T_s$ by eq. availgain). This makes the lab switch-path S-parameters a hard requirement for stage 2.
 
@@ -467,17 +467,11 @@ Notebook `003` (section D), with `001`, gives the following:
 
 ## 9. Open issues
 
-- **\[CHB: SP1 cable: length 3 m and no temperature logging are answered (CHB, 2026-09-14); the cable *type* is still open, for the thermal coefficient of delay and loss (Q-CGT-06).\]**
+- **\[CHB: SP1 cable type, for its thermal coefficients of delay and loss. The length (3 m) is known, and the temperature was not logged (Q-CHB-33, was Q-CGT-06).\]**
 
-- **\[CHB: The switch-path S-parameters are located (`field_cal_data_2026/cal_materials/switch_sparams.npz`). Please confirm with cgtolley that the file is final, and which OSL keys to use (logbook 2026-09-13; Q-CGT-01 to Q-CGT-04).\]**
+- **\[TODO: Fold in notebook `014` (stage-3 preparation). With the measured $|\Gamma_{\mathrm{rx}}|=0.326$, a lab hot load gives $\kappa=91.5$, 72.1 and 45.9 at 373, 400 and 500 K, and a 1 K hot-load error costs 9.2 K rms on a 1500 K antenna at 400 K (`docs/lab_calibration_plan.md` §1–2). On night 16/17, interpolating the reference across $\pm 12$ min leaves 0.26% rms in gain.\]**
 
-- **\[CHB: Seven night `ants11` files give a singular ideal-OSL solve. CHB: most likely the `cmt_vna` cold-start trigger bug (issue \#54); to confirm with Charlie (Q-CGT-09).\]**
-
-- **\[TODO: The post-deployment lab calibration is planned in `docs/lab_calibration_plan.md` (2026-09-14): hot load at 370–400 K, thermometry to 0.1 K, and the measurement list. Fold its conditioning numbers in here once a stage-3 notebook backs them.\]**
-
-- **\[TODO: Next notebook: gain interpolation between reference visits; receiver stability between night 16/17 and the Jul 17 SP1 epoch; a first tier-2 fit once stage-2 reflections exist.\]**
-
-- **\[TODO: Add the EIGSEP instrument paper to the bibliography and cite it.\]**
+- **\[TODO: $T_{\mathrm{NS}}$ is not constant over a night. On night 16/17 $Y=P_{\mathrm{NON}}/P_{\mathrm{AMB}}$ rises 0.47%/h, driven by $P_{\mathrm{NON}}$ and not tracked by temperature, so the fits need a smooth-in-time $T_{\mathrm{NS}}$ between changepoints (notebook `014`; Q-CHB-35). The Jul 17 SP1 epoch is not the night state ($Y$ is 0.898 of the night value), so the first tier-2 fit there needs its own $T_{\mathrm{NS}}$ and gain.\]**
 
 ## A. Derivation of the parameter map
 
@@ -515,6 +509,7 @@ With $T_0=\langle|B_R|^2\rangle$, $T_{\mathrm{unc}}=\langle|B_L|^2\rangle$ and $
 ## References
 
 - Bucher, M., Kirkham, C. J., de Lera Acedo, E., et al. 2026, Global 21cm Measurement Calibration Methodology, [arXiv:2607.26741](https://arxiv.org/abs/2607.26741)
+- Bye, C. H., DeBoer, D. R., Dexter, M., et al. 2026, The electromagnetically isolated global signal estimation platform (EIGSEP), [arXiv:2602.02661](https://arxiv.org/abs/2602.02661)
 - Dasgupta, S., Dash, A. K., Anstey, D., et al. 2026, Impact of numerical stability in Bayesian noise wave calibration on global 21-cm experiments, [arXiv:2607.26911](https://arxiv.org/abs/2607.26911)
 - Dash, A. K., Anstey, D., Bevins, H. T. J., et al. 2026, Optimisation of calibration sources for global 21-cm experiments: the REACH case, [arXiv:2604.00105](https://arxiv.org/abs/2604.00105)
 - Meys, R. P. 1978, A Wave Approach to the Noise Properties of Linear Microwave Devices, IEEE Transactions on Microwave Theory and Techniques, 26, 34–37, [doi:10.1109/TMTT.1978.1129303](https://doi.org/10.1109/TMTT.1978.1129303)

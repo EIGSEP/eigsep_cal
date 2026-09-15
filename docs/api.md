@@ -8,7 +8,7 @@ Items marked **Open** need a decision before code depends on them. Once a consum
 
 **Background**
 - Calibration is staged and Bayesian. Each stage passes a posterior, not a point estimate; there is no single joint fit.
-- The physics is derived and checked in EIGSEP memo M003, receiver calibration ([`memos/M003_receiver_calibration/memo.md`](memos/M003_receiver_calibration/memo.md)). Every equation used here is written out in § 4 under the memo's names (eq. Ps, eq. map, …).
+- The physics is derived and checked in [memo M003](memos/M003_receiver_calibration/memo.md). Every equation used here is written out in § 4 under the memo's names (eq. Ps, eq. map, …).
 - **Section numbers** match the Deployment 5 interface spec, which builds on this one and covers eigsim, the synthetic-data generator and the D5 adapters. Its sections 7–9 have no counterpart here.
 
 ---
