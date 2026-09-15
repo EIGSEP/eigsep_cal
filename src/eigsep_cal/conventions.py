@@ -1,4 +1,4 @@
-"""Conventions fixed by the interface spec (docs/interface.md)."""
+"""Conventions fixed by the API spec (docs/api.md)."""
 
 import numpy as np
 
