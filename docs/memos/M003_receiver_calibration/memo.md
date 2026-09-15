@@ -1,8 +1,6 @@
 # EIGSEP D5 Memo M003: Receiver calibration — the equations to solve, their inputs, and what deployment 5 can support
 
-> Generated from `memos/M003_receiver_calibration/memo.tex` at manuscript commit `5b9a8fa` of the EIGSEP Deployment 5 analysis by `scripts/memo2md.py`. Do not edit by hand: change the LaTeX source and regenerate.
->
-> Hand-edited in eigsep_cal on 2026-09-15 (PR #2 review): Section 3 (eqs. embed and availgain, port direction) and Section 8, item 3. The LaTeX source must carry the same change before this file is regenerated.
+> Generated from `memos/M003_receiver_calibration/memo.tex` at manuscript commit `d8fae42` of the EIGSEP Deployment 5 analysis by `scripts/memo2md.py`. Do not edit by hand: change the LaTeX source and regenerate.
 
 ## Abstract
 
@@ -103,11 +101,11 @@ T_s=G\,T_t+(1-G)\,T_p,\qquad
 G=\frac{|S_{12}|^2(1-|\Gamma_t|^2)}{|1-S_{22}\Gamma_t|^2(1-|\Gamma_s|^2)}.\tag{availgain}
 ```
 
-**Direction fixes the ports.** Both equations *embed*: they carry the termination outward through the path to what is seen looking into it from $\mathcal P$, and the port labels follow from that direction. Port 2 is the end the termination is attached to, port 1 is the end we look in from, and the signal crosses from port 2 to port 1. $G$ is the available gain along that crossing; for a reciprocal path $|S_{12}|^2=|S_{21}|^2=|S_{12}S_{21}|$.
+**Direction fixes the ports.** Both equations *embed*: they carry the termination outward through the path to what is seen looking into it from $\mathcal P$, and the port labels follow from that direction. Port 2 is the end the termination is attached to, port 1 is the end we look in from, and the signal crosses from port 2 to port 1. $G$ is the available gain along that crossing; for a reciprocal path $|S_{12}|^2=|S_{21}|^2=|S_{12}S_{21}|$.
 
-- *Sources.* $T_s=G\,T_t+(1-G)\,T_p$ is Monsalve et al. (2017) eq. 8 and holds in any labelling. Eqs. (embed) and (availgain) are Monsalve et al. (2024) eqs. 16 and 17, in the same labels (“port 1 (2) being the balun output (input)”); their eq. 17 is the balun efficiency, which takes a free-space antenna temperature through a lossy balun. Monsalve et al. (2017) eq. 9 prints the mirror image, with $S_{21}$ and $S_{11}$, because their port 1 carries the termination. It is the same gain, with the path read from the other end.
+- *Sources.* $T_s=G\,T_t+(1-G)\,T_p$ is Monsalve et al. (2017, eq. 8) and holds in any labelling. Eqs. (embed) and (availgain) are Monsalve et al. (2024, eqs. 16 and 17), in the same labels (“port 1 (2) being the balun output (input)”); their eq. 17 is the balun efficiency, which takes a free-space antenna temperature through a lossy balun. Monsalve et al. (2017, eq. 9) print the mirror image, with $S_{21}$ and $S_{11}$, because their port 1 carries the termination. It is the same gain, with the path read from the other end. The EDGES pipeline (edges-analysis, `compute_cable_loss_from_scattering_params`) uses our labels.
 
-- *Direction matters more than labels.* Putting $S_{11}$ where $S_{22}$ belongs in eq. (availgain) changes $G$ by a fraction $\approx2\operatorname{Re}[(S_{11}-S_{22})\Gamma_t]$: second order in small reflections, and zero for a symmetric path. Swapping the labels does not reverse the direction; the result still embeds, through the path turned round. Reversing the direction is de-embedding, $T_t=[T_s-(1-G)\,T_p]/G$. Used where eq. (availgain) belongs, it misplaces $T_s$ by $(1-G^2)(T_t-T_p)/G\approx2(1-G)(T_t-T_p)$, which is first order in the loss even for a matched path. Through a lossy path ($0<G<1$), embedding always puts $T_s$ strictly between $T_t$ and $T_p$.
+- *Direction matters more than labels.* Putting $S_{11}$ where $S_{22}$ belongs in eq. (availgain) changes $G$ by a fraction $\approx2\operatorname{Re}[(S_{11}-S_{22})\Gamma_t]$: second order in small reflections, and zero for a symmetric path. In eq. (embed) the same slip offsets $\Gamma_s$ by $\approx S_{22}-S_{11}$, first order. Swapping the labels does not reverse the direction; the result still embeds, through the path turned round. Reversing the direction is de-embedding, $T_t=[T_s-(1-G)\,T_p]/G$. Used where eq. (availgain) belongs, it misplaces $T_s$ by $(1-G^2)(T_t-T_p)/G\approx2(1-G)(T_t-T_p)$, which is first order in the loss even for a matched path. Through a lossy path ($0<G<1$), embedding always puts $T_s$ strictly between $T_t$ and $T_p$.
 
 REACH applies the same relation to every cabled calibrator (Roque et al. 2025).
 
@@ -443,7 +441,7 @@ Notebook `003` (section D), with `001`, gives the following:
 
     The LNAs and switches survived the fall (CHB; Q-CHB-09, resolved). A post-deployment lab calibration of the same receiver, with external hot and cold loads and cables, can therefore supply $T_{\mathrm{NS}}$ and the noise-wave parameters, as in Monsalve et al. (2017) and Monsalve et al. (2024). The result transfers to the field under case (iii) of Section 4, with the field AMB, NON and SP1 data as the check.
 
-    The coax from the antenna balun to the switch did not survive, so its S-parameters cannot be measured. It is on the antenna side of $\mathcal P$. The S11 chain and the in-situ calibration de-embed only switch paths, so for both of them the antenna source is the antenna, balun and coax together. The coax enters $\Gamma_s$ for the antenna and the efficiency correction, not the receiver calibration. The beam models are free space and include neither the balun nor the coax (CHB), so the calibrated $T_{\mathrm{ant}}$ is not at the plane of a simulated antenna temperature. Calibration needs no coax model. Comparisons with simulations do, with priors on the coax loss and temperature.
+    The coax from the antenna balun to the switch did not survive, so its S-parameters cannot be measured. It is on the antenna side of $\mathcal P$. The S11 chain de-embeds only the `VNA*` switch paths, and the in-situ calibration works at $\mathcal P$, so for both of them the antenna source is the antenna, balun and coax together. The coax enters $\Gamma_s$ for the antenna and the efficiency correction, not the receiver calibration. The beam models are free space and include neither the balun nor the coax (CHB), so the calibrated $T_{\mathrm{ant}}$ is not at the plane of a simulated antenna temperature. Calibration needs no coax model. Comparisons with simulations do, with priors on the coax loss and temperature.
 
 ## 8. Decisions and implications
 
