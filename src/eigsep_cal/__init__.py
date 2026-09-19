@@ -7,8 +7,9 @@ try:
 except PackageNotFoundError:
     __version__ = "unknown"
 
-from . import conventions
+from . import calkit, conventions
 from .data import Observation, Reflection, SkyTemperature
 from .forward import Source, power, radiometer_noise
 from .network import SParams, embed
 from .receiver import ReceiverModel, noise_wave_map
+from .s11 import S11, S11Sample
