@@ -24,8 +24,15 @@ Today it contains the v0 forward model and data objects of
 - `SkyTemperature`, `Reflection`, `Observation`, with npz save/load for
   the last two (§ 5).
 
-It also still contains `dicke.calc_Tant_star` (Monsalve et al. 2017,
-eq. 1).
+It also contains the minimal three-state Y-factor calibration in
+`dicke`: `calc_Tant_star` (Monsalve et al. 2017, eq. 1), `mismatch`,
+and the same equations as straight lines in the measured power,
+`tstar_coefficients` and `receiver_s11_coefficients`
+(T = scale · P + offset). The line form lets a calibration built from
+nearby noise-source, load and S11 measurements be applied to any
+integration afterwards; `eigsep_data`'s `tcal` product uses it. It
+assumes equal gain on every switch path and no receiver noise waves,
+and the result sits at reference plane P (§ 3 of `docs/api.md`).
 
 It also contains `calkit`, the OSL calibration math of Monsalve et al.
 2016, moved here from `cmt_vna` so that package only drives the
@@ -146,3 +153,11 @@ uv sync
 uv run pytest
 uv run ruff check .
 ```
+
+## Recent changes
+
+- 2026-10-01: `dicke` gained `mismatch`, `tstar_coefficients` and
+  `receiver_s11_coefficients`, the D5 minimal calibration as
+  T = scale · P + offset, for the `tcal` data product.
+- 2026-09-19: `s11.S11` and `calkit` added (field S11 calibration to
+  plane P, moved from `data-analysis` and `cmt_vna`).
