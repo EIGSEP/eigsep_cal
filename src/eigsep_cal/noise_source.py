@@ -9,9 +9,10 @@ in the switch paths.
 
 A bench measurement switches a hot load (temperature ``T_hot``), a reference
 load (``T_ref``) and the noise source on, and forms the switched ratio
-``Q = (P_hot - P_ref) / (P_NON - P_ref)`` (:func:`eigsep_cal.dicke.calc_Tant_star`
-with ``T_ns = 1`` and ``T_load = 0``). With the noise-source path's
-reflection at P known, the model gives::
+``Q = (P_hot - P_ref) / (P_NON - P_ref)``
+(:func:`eigsep_cal.dicke.calc_Tant_star` with ``T_ns = 1`` and
+``T_load = 0``). With the noise-source path's reflection at P known, the
+model gives::
 
     M_hot T_hot - M_ref T_ref = Q (M_NS T_NON - M_ref T_ref)
 
@@ -32,7 +33,8 @@ T0_K = 290.0
 
 def excess_from_enr(enr_db, pad_db=0.0):
     """Excess noise temperature (K) of a source of ENR ``enr_db`` (dB) seen
-    through a matched attenuator of ``pad_db`` dB: 290 K x 10**((ENR - pad)/10)."""
+    through a matched attenuator of ``pad_db`` dB:
+    290 K x 10**((ENR - pad)/10)."""
     return T0_K * 10 ** ((np.asarray(enr_db, float) - pad_db) / 10)
 
 
@@ -85,9 +87,12 @@ def fit_source_temperature(x, y, use=None, min_points=4):
     return {"a": a, "b": b, "sb": sb, "n": n, "res": res}
 
 
-def tns_as_received(t_ex_k, gamma_ns, gamma_rec, gamma_load, t_load_k, t_off_k=None):
+def tns_as_received(
+    t_ex_k, gamma_ns, gamma_rec, gamma_load, t_load_k, t_off_k=None
+):
     """``T_NS`` as a receiver takes it above its load:
-    ``P_NS - P_load = g T_NS`` with ``T_NS = M_NS (T_off + T_ex) - M_load T_load``.
+    ``P_NS - P_load = g T_NS`` with
+    ``T_NS = M_NS (T_off + T_ex) - M_load T_load``.
 
     ``t_ex_k`` is the noise source's excess at P over its off state, whose
     temperature ``t_off_k`` defaults to ``t_load_k`` (the noise path and the
@@ -107,19 +112,32 @@ def rescale_tns(t_star, t_cal, m_ant, t_load_k, t_ns_old, t_ns_new):
     ``T = (T* - (1 - M_load) T_load) / M_ant``
     (:func:`eigsep_cal.dicke.receiver_s11_coefficients`), so
     ``T*_new = T_load + (T_NS,new / T_NS,old) (T*_old - T_load)`` and
-    ``T_new = T_old + (T*_new - T*_old) / M_ant``. Returns ``(T*_new, T_new)``."""
-    t_star_new = t_load_k + (np.asarray(t_ns_new, float) / t_ns_old) * (t_star - t_load_k)
+    ``T_new = T_old + (T*_new - T*_old) / M_ant``.
+    Returns ``(T*_new, T_new)``."""
+    t_star_new = t_load_k + (np.asarray(t_ns_new, float) / t_ns_old) * (
+        t_star - t_load_k
+    )
     return t_star_new, t_cal + (t_star_new - t_star) / m_ant
 
 
-def switched_ratio_noise(p_hot, p_ref, p_non, n_hot, n_ref, n_non, enbw_hz, tau_s):
-    """Radiometer noise of ``Q = (P_hot - P_ref) / (P_NON - P_ref)``, each power
-    a mean of ``n_*`` integrations of ``tau_s`` s in a channel of ``enbw_hz``
-    Hz (sigma_P = P / sqrt(enbw tau n)), propagated to first order with the
-    three powers independent."""
+def switched_ratio_noise(
+    p_hot, p_ref, p_non, n_hot, n_ref, n_non, enbw_hz, tau_s
+):
+    """Radiometer noise of ``Q = (P_hot - P_ref) / (P_NON - P_ref)``, each
+    power a mean of ``n_*`` integrations of ``tau_s`` s in a channel of
+    ``enbw_hz`` Hz (sigma_P = P / sqrt(enbw tau n)), propagated to first
+    order with the three powers independent."""
+
     def sig(p, n):
-        return np.asarray(p, float) / np.sqrt(enbw_hz * tau_s * np.asarray(n, float))
+        return np.asarray(p, float) / np.sqrt(
+            enbw_hz * tau_s * np.asarray(n, float)
+        )
+
     d = np.asarray(p_non, float) - p_ref
     q = (np.asarray(p_hot, float) - p_ref) / d
-    var = sig(p_hot, n_hot) ** 2 + ((q - 1) * sig(p_ref, n_ref)) ** 2 + (q * sig(p_non, n_non)) ** 2
+    var = (
+        sig(p_hot, n_hot) ** 2
+        + ((q - 1) * sig(p_ref, n_ref)) ** 2
+        + (q * sig(p_non, n_non)) ** 2
+    )
     return np.sqrt(var) / np.abs(d)

@@ -21,7 +21,11 @@ NCHAN = 32
 
 
 def _gamma(rng, amp, n=NCHAN):
-    return amp * rng.uniform(0.2, 1.0, n) * np.exp(2j * np.pi * rng.uniform(size=n))
+    return (
+        amp
+        * rng.uniform(0.2, 1.0, n)
+        * np.exp(2j * np.pi * rng.uniform(size=n))
+    )
 
 
 def _power(gain, t_r, gamma, gamma_rec, t_source):
@@ -30,10 +34,14 @@ def _power(gain, t_r, gamma, gamma_rec, t_source):
 
 
 def test_enr_round_trip_and_nameplate():
-    assert excess_from_enr(35.0, pad_db=30.0) == pytest.approx(917.06, abs=0.01)
+    assert excess_from_enr(35.0, pad_db=30.0) == pytest.approx(
+        917.06, abs=0.01
+    )
     assert excess_from_enr(30.0, pad_db=30.0) == pytest.approx(290.0)
     enr = np.array([30.0, 32.3, 35.0])
-    np.testing.assert_allclose(enr_from_excess(excess_from_enr(enr, 30.0), 30.0), enr)
+    np.testing.assert_allclose(
+        enr_from_excess(excess_from_enr(enr, 30.0), 30.0), enr
+    )
 
 
 def test_fit_recovers_source_temperature_with_mismatch():
@@ -53,8 +61,14 @@ def test_fit_recovers_source_temperature_with_mismatch():
     p_ref = _power(gain, t_r, g_ref, g_rec, t_ref)
     p_non = _power(gain, t_r, g_ns, g_rec, t_non * np.ones((ncyc, 1)))
     q = calc_Tant_star(p_hot, p_non, p_ref, 1.0, 0.0)
-    x, y = source_temperature_terms(q, mismatch(g_hot, g_rec), mismatch(g_ref, g_rec),
-                                    mismatch(g_ns, g_rec), t_hot, t_ref)
+    x, y = source_temperature_terms(
+        q,
+        mismatch(g_hot, g_rec),
+        mismatch(g_ref, g_rec),
+        mismatch(g_ns, g_rec),
+        t_hot,
+        t_ref,
+    )
     fit = fit_source_temperature(x, y)
     np.testing.assert_allclose(fit["b"], t_non, rtol=1e-9)
     np.testing.assert_allclose(fit["a"], 0.0, atol=1e-6)
@@ -64,9 +78,9 @@ def test_fit_recovers_source_temperature_with_mismatch():
 def test_fit_masks_cycles_and_short_channels():
     x = np.tile(np.arange(10.0)[:, None], (1, 3))
     y = 2.0 + 5.0 * x
-    y[3, 0] = np.nan                      # a missing point in channel 0
+    y[3, 0] = np.nan  # a missing point in channel 0
     y[:, 2] = np.nan
-    y[:3, 2] = 1.0                        # channel 2: too few points
+    y[:3, 2] = 1.0  # channel 2: too few points
     use = np.ones(10, bool)
     use[-1] = False
     fit = fit_source_temperature(x, y, use)
@@ -86,10 +100,15 @@ def test_tns_as_received_matches_the_power_difference():
     t_load, t_ex = 300.0, rng.uniform(400, 600, NCHAN)
     p_ns = _power(gain, t_r, g_ns, g_rec, t_load + t_ex)
     p_load = _power(gain, t_r, g_load, g_rec, t_load)
-    np.testing.assert_allclose(tns_as_received(t_ex, g_ns, g_rec, g_load, t_load),
-                               (p_ns - p_load) / gain, rtol=1e-12)
+    np.testing.assert_allclose(
+        tns_as_received(t_ex, g_ns, g_rec, g_load, t_load),
+        (p_ns - p_load) / gain,
+        rtol=1e-12,
+    )
     zero = np.zeros(NCHAN)
-    np.testing.assert_allclose(tns_as_received(t_ex, zero, g_rec, zero, t_load), t_ex)
+    np.testing.assert_allclose(
+        tns_as_received(t_ex, zero, g_rec, zero, t_load), t_ex
+    )
 
 
 def test_rescale_tns_matches_rebuilding_the_coefficients():
@@ -121,5 +140,7 @@ def test_switched_ratio_noise_matches_monte_carlo():
     sig = {k: p[k] / np.sqrt(enbw * tau * n[k]) for k in p}
     draws = {k: p[k] + sig[k] * rng.standard_normal(200000) for k in p}
     q = (draws["hot"] - draws["ref"]) / (draws["non"] - draws["ref"])
-    pred = switched_ratio_noise(p["hot"], p["ref"], p["non"], n["hot"], n["ref"], n["non"], enbw, tau)
+    pred = switched_ratio_noise(
+        p["hot"], p["ref"], p["non"], n["hot"], n["ref"], n["non"], enbw, tau
+    )
     assert np.std(q) == pytest.approx(pred, rel=0.02)
