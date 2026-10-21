@@ -34,6 +34,18 @@ integration afterwards; `eigsep_data`'s `tcal` product uses it. It
 assumes equal gain on every switch path and no receiver noise waves,
 and the result sits at reference plane P (§ 3 of `docs/api.md`).
 
+`noise_source` gets the noise source's temperature from a bench run that
+switches a hot load, a reference load and the noise source through the
+switch: with the noise-source path's reflection at P measured, the slope of
+`M_hot T_hot - (1 - Q) M_ref T_ref` against `Q M_NS` is `T_NON`, the
+noise-source path's temperature at P, which does not depend on the
+receiver (`source_temperature_terms`, `fit_source_temperature`).
+`tns_as_received` turns an excess at P into the `T_NS` a given receiver
+takes above its load, the quantity `dicke.tstar_coefficients` uses;
+`rescale_tns` redoes a calibration for a different `T_NS`; and
+`excess_from_enr`, `enr_from_excess` and `switched_ratio_noise` go with
+them. Same minimal model as `dicke` (no noise waves, no switch-path loss).
+
 It also contains `calkit`, the OSL calibration math of Monsalve et al.
 2016, moved here from `cmt_vna` so that package only drives the
 instrument; and `S11`, below.
@@ -156,6 +168,9 @@ uv run ruff check .
 
 ## Recent changes
 
+- 2026-10-20: `noise_source` added: the noise source's temperature at P from a
+  hot/reference-load bench run, independent of the receiver, and the `T_NS` a
+  given receiver takes of it, for a `tcal` built on a measured noise source.
 - 2026-10-01: `dicke` gained `mismatch`, `tstar_coefficients` and
   `receiver_s11_coefficients`, the D5 minimal calibration as
   T = scale · P + offset, for the `tcal` data product.
